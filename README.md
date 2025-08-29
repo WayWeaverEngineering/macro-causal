@@ -59,11 +59,14 @@ User Query → FastAPI → X-Learner Inference → OpenAI Text Generation → St
 
 ## 🔬 Causal Inference Methodology
 
-### X-Learner with Double Machine Learning
+### Hybrid Approach: econml + PyTorch
 
+The system implements a **hybrid architecture** combining the reliability of **econml** for core causal inference with the flexibility of **PyTorch** for advanced components:
+
+#### Core Causal Inference: X-Learner with DML (econml)
 The system uses **X-Learner** combined with **Double Machine Learning (DML)** for robust causal inference:
 
-#### Double Machine Learning (DML)
+**Double Machine Learning (DML)**
 DML addresses confounding variables by using machine learning in two stages:
 
 1. **Stage 1**: Predict treatment (macro shock) from confounders
@@ -77,13 +80,53 @@ sp500_residual = actual_sp500_returns - predicted_sp500_returns
 causal_effect = regression(sp500_residual ~ fed_rate_residual)
 ```
 
-#### X-Learner
+**X-Learner**
 X-Learner extends DML to handle heterogeneous treatment effects:
 
 - **Learner 1**: Estimate outcome model for treated units
 - **Learner 2**: Estimate outcome model for control units
 - **Learner 3**: Estimate treatment effect model
 - **Final Effect**: Weighted combination of all learners
+
+#### Advanced Components: PyTorch
+
+**Regime Classification**
+Identifies different market states where causal relationships behave differently:
+
+```python
+class AttentionRegimeClassifier(nn.Module):
+    def __init__(self, input_size=20, hidden_size=32, n_regimes=3):
+        super().__init__()
+        self.embedding = nn.Linear(input_size, hidden_size)
+        self.attention = nn.MultiheadAttention(hidden_size, num_heads=4)
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, n_regimes),
+            nn.Softmax(dim=1)
+        )
+    
+    def forward(self, x):
+        embedded = self.embedding(x).unsqueeze(0)
+        attended, _ = self.attention(embedded, embedded, embedded)
+        return self.classifier(attended.squeeze(0))
+```
+
+**Uncertainty Estimation**
+Provides confidence levels for causal effect estimates:
+
+```python
+class UncertaintyEstimator(nn.Module):
+    def __init__(self, input_size=20, hidden_size=32):
+        super().__init__()
+        self.uncertainty_net = nn.Sequential(
+            nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1),
+            nn.Softplus()  # Ensures positive uncertainty
+        )
+    
+    def forward(self, x):
+        return self.uncertainty_net(x)
+```
 
 ### Treatment Variables (Macro Shocks)
 
@@ -138,38 +181,45 @@ class MacroCausalDataProcessor:
         # Generate asset returns (outcomes)
 ```
 
-### Day 2: X-Learner with DML Model Training
+### Day 2: Hybrid Model Training
 
 #### Tasks
-- [ ] Implement X-Learner with DML model
-- [ ] Train model on historical data
-- [ ] Implement time-series validation
-- [ ] Add model performance metrics
+- [ ] Train core X-Learner with DML (econml)
+- [ ] Implement PyTorch regime classifier
+- [ ] Implement PyTorch uncertainty estimator
+- [ ] Integrate components and validate
 
 #### Code Structure
 ```python
-# causal_model.py
-class XLearnerCausalModel:
+# hybrid_causal_system.py
+class HybridCausalSystem:
     def __init__(self):
-        self.model = CausalForestDML(
-            model_y=RandomForestRegressor(),
-            model_t=RandomForestRegressor(),
+        # Core causal inference with econml
+        self.causal_model = CausalForestDML(
+            model_y=RandomForestRegressor(n_estimators=100),
+            model_t=RandomForestRegressor(n_estimators=100),
             n_estimators=100
         )
+        
+        # PyTorch components
+        self.regime_classifier = AttentionRegimeClassifier()
+        self.uncertainty_estimator = UncertaintyEstimator()
     
-    def fit(self, X, T, Y):
-        # Train X-Learner with DML
-    
-    def estimate_causal_effect(self, X_new=None):
-        # Estimate causal effects
+    def train(self, X, T, Y):
+        # Train causal model (econml)
+        self.causal_model.fit(Y, T, X=X)
+        
+        # Train PyTorch components with profiler
+        self._train_regime_classifier(X, Y)
+        self._train_uncertainty_estimator(X, T, Y)
 ```
 
 ### Day 3: FastAPI Integration & OpenAI Text Generation
 
 #### Tasks
 - [ ] Build FastAPI backend
-- [ ] Integrate X-Learner model
-- [ ] Add OpenAI text generation
+- [ ] Integrate hybrid causal system
+- [ ] Add OpenAI text generation with regime/uncertainty context
 - [ ] Implement error handling
 
 #### Code Structure
@@ -177,9 +227,19 @@ class XLearnerCausalModel:
 # main.py
 @app.post("/causal-analysis")
 async def get_causal_analysis(query: CausalQuery):
-    # Run X-Learner inference
-    # Generate OpenAI explanation
-    # Return structured response
+    # Run hybrid inference (econml + PyTorch)
+    inference = HybridCausalInference(causal_system)
+    results = inference.get_comprehensive_analysis(X_new, T_new)
+    
+    # Generate enhanced explanation with regime/uncertainty
+    explanation = generate_enhanced_explanation(query, results)
+    
+    return {
+        "causal_effect": results['causal_effect'],
+        "regime": results['dominant_regime'],
+        "uncertainty": results['uncertainty'],
+        "explanation": explanation
+    }
 ```
 
 ### Day 4: Frontend & Deployment
@@ -216,8 +276,17 @@ async def get_causal_analysis(query: CausalQuery):
 ### Dependencies
 ```python
 # requirements.txt
-econml==0.14.1          # Causal inference library
-scikit-learn==1.3.0     # Machine learning
+# Core causal inference
+econml==0.14.1          # X-Learner with DML
+scikit-learn==1.3.0     # Traditional ML models
+
+# PyTorch ecosystem
+torch==2.1.0            # PyTorch for custom components
+torchvision==0.16.0     # For torch.profiler
+onnx==1.15.0            # ONNX export
+onnxruntime==1.16.0     # ONNX inference
+
+# Data and API
 pandas==2.0.3           # Data manipulation
 numpy==1.24.3           # Numerical computing
 fastapi==0.104.1        # API framework
@@ -228,14 +297,32 @@ yfinance==0.2.18        # Market data
 
 ### Model Configuration
 ```python
-# X-Learner with DML settings
-model_config = {
-    'model_y': RandomForestRegressor(n_estimators=100, random_state=42),
-    'model_t': RandomForestRegressor(n_estimators=100, random_state=42),
-    'n_estimators': 100,
-    'min_samples_leaf': 10,
-    'max_depth': 10,
-    'random_state': 42
+# Hybrid system configuration
+hybrid_config = {
+    # Core causal inference (econml)
+    'causal_model': {
+        'model_y': RandomForestRegressor(n_estimators=100, random_state=42),
+        'model_t': RandomForestRegressor(n_estimators=100, random_state=42),
+        'n_estimators': 100,
+        'min_samples_leaf': 10,
+        'max_depth': 10
+    },
+    
+    # PyTorch regime classifier
+    'regime_classifier': {
+        'input_size': 20,
+        'hidden_size': 32,
+        'n_regimes': 3,  # High Vol/Recession, Low Vol/Expansion, Normal
+        'attention_heads': 4,
+        'dropout': 0.3
+    },
+    
+    # PyTorch uncertainty estimator
+    'uncertainty_estimator': {
+        'input_size': 20,
+        'hidden_size': 32,
+        'dropout': 0.3
+    }
 }
 ```
 
@@ -251,10 +338,20 @@ POST /causal-analysis
 
 Response:
 {
-    "causal_effect": -0.023,
-    "confidence_interval": [-0.035, -0.011],
+    "causal_analysis": {
+        "effect": -0.023,
+        "confidence_interval": [-0.035, -0.011],
+        "regime": 1,
+        "regime_probabilities": [0.1, 0.7, 0.2],
+        "uncertainty": 0.15,
+        "regime_effects": {
+            "regime_0": -0.045,  # High Vol/Recession
+            "regime_1": -0.018,  # Low Vol/Expansion
+            "regime_2": -0.025   # Normal
+        }
+    },
     "explanation": "A 1% Fed rate hike causally reduces S&P 500 returns by 2.3%...",
-    "methodology": "X-Learner with Double Machine Learning"
+    "methodology": "Hybrid: X-Learner DML + PyTorch Regime/Uncertainty"
 }
 ```
 
@@ -266,7 +363,13 @@ Response:
 **Response**: 
 - **Causal Effect**: -2.3% (significant at 5% level)
 - **Confidence Interval**: [-3.5%, -1.1%]
-- **Explanation**: "A 1% Fed rate hike causally reduces S&P 500 returns by 2.3% after controlling for inflation, GDP growth, and other confounding factors. This effect is statistically significant and economically meaningful."
+- **Market Regime**: Low Volatility/Expansion (70% probability)
+- **Uncertainty**: Low (0.15)
+- **Regime-Dependent Effects**: 
+  - High Vol/Recession: -4.5% (stronger effect)
+  - Low Vol/Expansion: -1.8% (weaker effect)
+  - Normal: -2.5% (baseline effect)
+- **Explanation**: "A 1% Fed rate hike causally reduces S&P 500 returns by 2.3% in the current low-volatility expansion regime. The effect is stronger during high-volatility recession periods (-4.5%) and weaker during expansion periods (-1.8%)."
 
 ### Example 2: CPI Surprise Analysis
 **Query**: "How do CPI surprises affect bond returns?"
@@ -274,15 +377,22 @@ Response:
 **Response**:
 - **Causal Effect**: -1.8% (significant at 5% level)
 - **Confidence Interval**: [-2.9%, -0.7%]
-- **Explanation**: "Unexpected inflation increases causally reduce bond returns by 1.8%, reflecting the negative relationship between inflation and bond prices."
+- **Market Regime**: High Volatility/Recession (65% probability)
+- **Uncertainty**: High (0.25)
+- **Regime-Dependent Effects**:
+  - High Vol/Recession: -2.8% (stronger effect)
+  - Low Vol/Expansion: -1.2% (weaker effect)
+- **Explanation**: "CPI surprises causally reduce bond returns by 1.8%, with stronger effects during high-volatility recession periods. Current uncertainty is elevated due to market stress."
 
-### Example 3: Regime-Dependent Effects
-**Query**: "How do GDP shocks affect gold in high vs low volatility periods?"
+### Example 3: Regime Classification Analysis
+**Query**: "What market regime are we currently in and how does it affect causal relationships?"
 
 **Response**:
-- **High Volatility**: -0.5% effect
-- **Low Volatility**: +0.2% effect
-- **Explanation**: "GDP shocks have different causal effects on gold depending on market volatility, suggesting regime-dependent relationships."
+- **Current Regime**: Low Volatility/Expansion (70% probability)
+- **Regime Features**: Low VIX, positive GDP growth, stable inflation
+- **Causal Implications**: Fed policy effects are muted in expansion regime
+- **Risk Management**: Monitor for regime transition to high volatility
+- **Explanation**: "The system identifies a low-volatility expansion regime where causal effects of macro shocks are typically smaller and more predictable. This suggests a favorable environment for risk assets."
 
 ## 🔍 Model Interpretation
 
@@ -294,7 +404,9 @@ Response:
 ### Heterogeneous Treatment Effects
 - **Average Effect**: Overall causal effect across all conditions
 - **Conditional Effects**: Effects that vary by market conditions
+- **Regime-Dependent Effects**: Different causal relationships in different market states
 - **X-Learner Advantage**: Captures regime-dependent relationships
+- **PyTorch Enhancement**: Attention mechanisms identify regime-specific patterns
 
 ### Statistical Significance
 - **P-values**: Probability of observing effect by chance
@@ -314,6 +426,9 @@ Response:
 - **Model Caching**: Pre-computed effects for common queries
 - **Batch Processing**: Efficient handling of multiple requests
 - **Async Processing**: Non-blocking inference pipeline
+- **PyTorch Profiling**: torch.profiler for performance analysis
+- **TorchScript Optimization**: Compiled models for faster inference
+- **ONNX Deployment**: Cross-platform model serving
 
 ### Monitoring & Maintenance
 - **Model Drift**: Monitor for changes in causal relationships
@@ -325,11 +440,15 @@ Response:
 ### Academic Papers
 - Künzel, S. R., et al. (2019). "Metalearners for estimating heterogeneous treatment effects using machine learning." PNAS
 - Chernozhukov, V., et al. (2018). "Double/debiased machine learning for treatment and structural parameters." The Econometrics Journal
+- Vaswani, A., et al. (2017). "Attention is all you need." NIPS
 
 ### Technical Documentation
 - [EconML Documentation](https://econml.azurewebsites.net/)
 - [Double Machine Learning Tutorial](https://econml.azurewebsites.net/spec/estimation/dml.html)
 - [X-Learner Implementation Guide](https://econml.azurewebsites.net/spec/estimation/dml.html#causal-forests)
+- [PyTorch Profiler](https://pytorch.org/tutorials/beginner/profiler.html)
+- [TorchScript Tutorial](https://pytorch.org/tutorials/beginner/Intro_to_TorchScript_tutorial.html)
+- [ONNX Export Guide](https://pytorch.org/tutorials/advanced/super_resolution_with_onnxruntime.html)
 
 ### Bridgewater Resources
 - Bridgewater Associates Research Papers
@@ -358,4 +477,4 @@ This project is proprietary and confidential. All rights reserved.
 
 **Built with ❤️ for Bridgewater Associates AI Lab**
 
-*This system demonstrates the power of causal inference in macro-finance, providing the analytical rigor that Bridgewater Associates values in their investment process.*
+*This hybrid system demonstrates the power of combining proven causal inference methodology with cutting-edge PyTorch technology, providing the analytical rigor and technical sophistication that Bridgewater Associates values in their investment process.*
