@@ -34,6 +34,7 @@ export class CodeBuildPipeline extends CodePipeline {
             resources: [
               'arn:aws:codeartifact:us-east-1:715067592333:domain/wayweaver-shared-artifacts',
               'arn:aws:codeartifact:us-east-1:715067592333:repository/wayweaver-shared-artifacts/npm-typescript',
+              'arn:aws:codeartifact:us-east-1:715067592333:repository/wayweaver-shared-artifacts/pip-python-3-10',
             ],
           }),
           new PolicyStatement({
