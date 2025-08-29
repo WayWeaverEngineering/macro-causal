@@ -45,9 +45,17 @@ export class APIDataCollectionConstruct extends Construct {
       }
     });
 
+    // Create Python dependencies Lambda layer
+    const pythonDependenciesLayer = new lambda.LayerVersion(this, 'PythonDependenciesLayer', {
+      code: lambda.Code.fromAsset('../lambda/layers/python-dependencies'),
+      compatibleRuntimes: [lambda.Runtime.PYTHON_3_10],
+      description: 'Python dependencies for API collectors',
+      layerVersionName: DefaultIdBuilder.build('python-dependencies-layer')
+    });
+
     // Common Lambda configuration
     const lambdaConfig = {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_10,
       timeout: Duration.minutes(15),
       memorySize: 1024,
       environment: {
@@ -64,6 +72,7 @@ export class APIDataCollectionConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/api-collectors'),
       functionName: DefaultIdBuilder.build('fred-collector'),
       description: 'Collects economic indicators from FRED API',
+      layers: [pythonDependenciesLayer],
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS
@@ -78,6 +87,7 @@ export class APIDataCollectionConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/api-collectors'),
       functionName: DefaultIdBuilder.build('worldbank-collector'),
       description: 'Collects economic indicators from World Bank API',
+      layers: [pythonDependenciesLayer],
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS
@@ -92,6 +102,7 @@ export class APIDataCollectionConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/api-collectors'),
       functionName: DefaultIdBuilder.build('yahoo-finance-collector'),
       description: 'Collects market data from Yahoo Finance API',
+      layers: [pythonDependenciesLayer],
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS

@@ -29,7 +29,7 @@ export class DataIngestionConstruct extends Construct {
 
     // Common Lambda configuration
     const lambdaConfig: any = {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      runtime: lambda.Runtime.PYTHON_3_10,
       timeout: Duration.minutes(1),
       memorySize: 512
     };
