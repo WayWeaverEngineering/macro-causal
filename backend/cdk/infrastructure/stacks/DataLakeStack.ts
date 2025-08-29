@@ -7,7 +7,7 @@ import { VPCStack } from './VPCStack';
 
 export interface DataLakeStackProps extends StackProps {
   environment: string;
-  vpcStack?: VPCStack;
+  vpcStack: VPCStack;
 }
 
 export class DataLakeStack extends Stack {
@@ -30,8 +30,8 @@ export class DataLakeStack extends Stack {
       bronzeBucket: this.dataLake.bronzeBucket,
       emrApplication: this.dataLake.emrApplication,
       emrRole: this.dataLake.emrRole,
-      vpc: props.vpcStack?.vpcConstruct.vpc,
-      securityGroup: props.vpcStack?.vpcConstruct.securityGroup
+      vpc: props.vpcStack.vpcConstruct.vpc,
+      securityGroup: props.vpcStack.vpcConstruct.securityGroup
     });
   }
 }
