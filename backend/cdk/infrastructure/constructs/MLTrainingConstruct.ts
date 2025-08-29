@@ -5,7 +5,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { RemovalPolicy } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
 
@@ -15,7 +15,7 @@ export interface MLTrainingProps {
   region: string;
   goldBucket: s3.Bucket;
   artifactsBucket: s3.Bucket;
-  vpc?: ec2.IVpc;
+  vpc: ec2.IVpc;
 }
 
 export class MLTrainingConstruct extends Construct {
@@ -26,28 +26,31 @@ export class MLTrainingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: MLTrainingProps) {
     super(scope, id);
 
-    // VPC for EKS cluster
-    const vpc = props.vpc || new ec2.Vpc(this, 'MLTrainingVPC', {
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        }
-      ]
+    // Create EKS cluster
+    this.eksCluster = new eks.Cluster(this, RESOURCE_NAMES.EKS_CLUSTER, {
+      version: eks.KubernetesVersion.of(MACRO_CAUSAL_CONSTANTS.EKS.KUBERNETES_VERSION),
+      vpc: props.vpc,
+      defaultCapacity: 0, // Use Karpenter for auto-scaling
+      clusterName: DefaultIdBuilder.build('ml-training-cluster'),
+      endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
+      vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+      role: new iam.Role(this, 'EKSClusterRole', {
+        assumedBy: new iam.ServicePrincipal('eks.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSClusterPolicy')
+        ]
+      }),
+      kubectlLayer: new lambda.LayerVersion(this, 'KubectlLayer', {
+        code: lambda.Code.fromAsset('kubectl-layer'),
+        compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
+        description: 'Kubectl layer for EKS cluster'
+      })
     });
 
     // EKS cluster for ML training
     this.eksCluster = new eks.Cluster(this, RESOURCE_NAMES.EKS_CLUSTER, {
       version: eks.KubernetesVersion.of(MACRO_CAUSAL_CONSTANTS.EKS.KUBERNETES_VERSION),
-      vpc: vpc,
+      vpc: props.vpc,
       defaultCapacity: 0, // Use Karpenter for auto-scaling
       clusterName: DefaultIdBuilder.build('ml-training-cluster'),
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,

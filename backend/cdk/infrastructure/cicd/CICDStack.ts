@@ -7,6 +7,7 @@ import { LayerArns } from '@wayweaver/ariadne';
 
 interface CICDStackProps extends StackProps {
   prebuiltLambdaLayerArns: LayerArns
+  environment: string;
 }
 
 export class CICDStack extends Stack {
@@ -20,7 +21,8 @@ export class CICDStack extends Stack {
     // Add deployment stage to deploy the built code
     const stageId = DefaultIdBuilder.build('deployment-stage');
     codeBuildPipeline.addStage(new DeploymentStage(this, stageId, {
-      prebuiltLambdaLayerArns: props.prebuiltLambdaLayerArns
+      prebuiltLambdaLayerArns: props.prebuiltLambdaLayerArns,
+      environment: props.environment
     }));
   }
 }

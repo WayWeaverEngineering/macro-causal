@@ -88,6 +88,8 @@ export const MACRO_CAUSAL_CONSTANTS = {
 export const RESOURCE_NAMES = {
   // Stack names
   DATA_LAKE_STACK: 'data-lake-stack',
+  VPC_STACK: 'vpc-stack',
+  API_DATA_COLLECTION_STACK: 'api-data-collection-stack',
   ML_TRAINING_STACK: 'ml-training-stack',
   INFERENCE_STACK: 'inference-stack',
   MONITORING_STACK: 'monitoring-stack',
@@ -96,11 +98,13 @@ export const RESOURCE_NAMES = {
   // Construct names
   DATA_LAKE_CONSTRUCT: 'data-lake',
   DATA_INGESTION_CONSTRUCT: 'data-ingestion',
+  API_DATA_COLLECTION_CONSTRUCT: 'api-data-collection',
   ML_TRAINING_CONSTRUCT: 'ml-training',
   MODEL_SAVING_CONSTRUCT: 'model-saving',
   INFERENCE_CONSTRUCT: 'inference',
   MONITORING_CONSTRUCT: 'monitoring',
   ORCHESTRATION_CONSTRUCT: 'orchestration',
+  VPC_CONSTRUCT: 'vpc',
 
   // Resource names
   BRONZE_BUCKET: 'bronze-bucket',
@@ -108,6 +112,7 @@ export const RESOURCE_NAMES = {
   GOLD_BUCKET: 'gold-bucket',
   ARTIFACTS_BUCKET: 'artifacts-bucket',
   LOGS_BUCKET: 'logs-bucket',
+  VPC: 'vpc',
   EMR_APPLICATION: 'emr-application',
   EKS_CLUSTER: 'eks-cluster',
   RAY_CLUSTER: 'ray-cluster',

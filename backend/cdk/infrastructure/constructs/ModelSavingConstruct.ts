@@ -8,12 +8,15 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface ModelSavingProps {
   environment: string;
   accountId: string;
   region: string;
   trainingRole: iam.Role;
+  vpc: ec2.IVpc;
+  securityGroup: ec2.ISecurityGroup;
 }
 
 export class ModelSavingConstruct extends Construct {
@@ -90,7 +93,12 @@ export class ModelSavingConstruct extends Construct {
         ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
-      memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB
+      memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for model promotion
@@ -104,7 +112,12 @@ export class ModelSavingConstruct extends Construct {
         ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
-      memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB
+      memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Grant permissions to Lambda functions

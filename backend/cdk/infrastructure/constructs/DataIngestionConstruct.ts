@@ -5,6 +5,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
@@ -14,6 +15,8 @@ export interface DataIngestionProps {
   bronzeBucket: any; // s3.Bucket
   emrApplication: any; // emrserverless.CfnApplication
   emrRole: any; // iam.Role
+  vpc: ec2.IVpc;
+  securityGroup: ec2.ISecurityGroup;
 }
 
 export class DataIngestionConstruct extends Construct {
@@ -24,9 +27,16 @@ export class DataIngestionConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DataIngestionProps) {
     super(scope, id);
 
+    // Common Lambda configuration
+    const lambdaConfig: any = {
+      runtime: lambda.Runtime.PYTHON_3_9,
+      timeout: Duration.minutes(1),
+      memorySize: 512
+    };
+
     // Lambda function to start ingestion workflow
     const ingestionTrigger = new lambda.Function(this, 'IngestionTrigger', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      ...lambdaConfig,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
@@ -34,13 +44,18 @@ export class DataIngestionConstruct extends Construct {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         STATE_MACHINE_ARN: '' // Will be set after state machine creation
       },
-      timeout: Duration.minutes(1),
-      memorySize: 512
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function to start EMR job
     const startEmrJob = new lambda.Function(this, 'StartEmrJob', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      ...lambdaConfig,
+      timeout: Duration.minutes(5),
+      memorySize: 1024,
       handler: 'start_emr_job.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
@@ -49,21 +64,28 @@ export class DataIngestionConstruct extends Construct {
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId,
         EMR_ROLE_ARN: props.emrRole.roleArn
       },
-      timeout: Duration.minutes(5),
-      memorySize: 1024
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function to check EMR job status
     const checkEmrJobStatus = new lambda.Function(this, 'CheckEmrJobStatus', {
-      runtime: lambda.Runtime.PYTHON_3_9,
+      ...lambdaConfig,
+      timeout: Duration.minutes(2),
       handler: 'check_emr_job.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
         ENVIRONMENT: props.environment,
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId
       },
-      timeout: Duration.minutes(2),
-      memorySize: 512
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Step Functions state machine for ingestion workflow

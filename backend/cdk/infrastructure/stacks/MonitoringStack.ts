@@ -2,11 +2,13 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { RESOURCE_NAMES } from '../../utils/Constants';
 import { MonitoringConstruct } from '../constructs/MonitoringConstruct';
+import { VPCStack } from './VPCStack';
 
 export interface MonitoringStackProps extends StackProps {
   environment: string;
   inferenceStack: any; // InferenceStack
   mlTrainingStack: any; // MLTrainingStack
+  vpcStack: VPCStack;
 }
 
 export class MonitoringStack extends Stack {
@@ -22,7 +24,9 @@ export class MonitoringStack extends Stack {
       region: this.region,
       ecsCluster: props.inferenceStack.inference.ecsCluster,
       alb: props.inferenceStack.inference.alb,
-      registryTable: props.mlTrainingStack.modelSaving.registryTable
+      registryTable: props.mlTrainingStack.modelSaving.registryTable,
+      vpc: props.vpcStack.vpcConstruct.vpc,
+      securityGroup: props.vpcStack.vpcConstruct.securityGroup
     });
   }
 }

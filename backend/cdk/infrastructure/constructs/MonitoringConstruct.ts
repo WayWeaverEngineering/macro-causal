@@ -4,13 +4,12 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface MonitoringProps {
   environment: string;
@@ -19,6 +18,8 @@ export interface MonitoringProps {
   ecsCluster: any; // ecs.Cluster
   alb: any; // elbv2.ApplicationLoadBalancer
   registryTable: any; // dynamodb.Table
+  vpc: ec2.IVpc;
+  securityGroup: ec2.ISecurityGroup;
 }
 
 export class MonitoringConstruct extends Construct {
@@ -47,7 +48,12 @@ export class MonitoringConstruct extends Construct {
         ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(1),
-      memorySize: 512
+      memorySize: 512,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for performance monitoring
@@ -61,7 +67,12 @@ export class MonitoringConstruct extends Construct {
         CLOUDWATCH_NAMESPACE: MACRO_CAUSAL_CONSTANTS.CLOUDWATCH.NAMESPACE
       },
       timeout: Duration.minutes(5),
-      memorySize: 1024
+      memorySize: 1024,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for data quality monitoring
@@ -74,7 +85,12 @@ export class MonitoringConstruct extends Construct {
         ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(5),
-      memorySize: 1024
+      memorySize: 1024,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for registry health monitoring
@@ -88,7 +104,12 @@ export class MonitoringConstruct extends Construct {
         DYNAMODB_TABLE: props.registryTable.tableName
       },
       timeout: Duration.minutes(2),
-      memorySize: 512
+      memorySize: 512,
+      vpc: props.vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
+      },
+      securityGroups: [props.securityGroup]
     });
 
     // Grant permissions to Lambda functions

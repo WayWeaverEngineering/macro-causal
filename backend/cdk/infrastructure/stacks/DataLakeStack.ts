@@ -3,9 +3,11 @@ import { Construct } from 'constructs';
 import { RESOURCE_NAMES } from '../../utils/Constants';
 import { DataLakeConstruct } from '../constructs/DataLakeConstruct';
 import { DataIngestionConstruct } from '../constructs/DataIngestionConstruct';
+import { VPCStack } from './VPCStack';
 
 export interface DataLakeStackProps extends StackProps {
   environment: string;
+  vpcStack?: VPCStack;
 }
 
 export class DataLakeStack extends Stack {
@@ -27,7 +29,9 @@ export class DataLakeStack extends Stack {
       environment: props.environment,
       bronzeBucket: this.dataLake.bronzeBucket,
       emrApplication: this.dataLake.emrApplication,
-      emrRole: this.dataLake.emrRole
+      emrRole: this.dataLake.emrRole,
+      vpc: props.vpcStack?.vpcConstruct.vpc,
+      securityGroup: props.vpcStack?.vpcConstruct.securityGroup
     });
   }
 }
