@@ -16,7 +16,7 @@ install_layer_dependencies() {
     local layer_dir="$2"
     
     # Define installation directory
-    local installation_dir="$layer_dir/create_layer/python/site-packages"
+    local installation_dir="$layer_dir/create_layer/python"
     
     echo "Installing Python dependencies for $layer_name..."
     
@@ -27,70 +27,7 @@ install_layer_dependencies() {
     echo "Installing dependencies from $layer_dir/requirements.txt..."
     pip install -r "$layer_dir/requirements.txt" --target "$installation_dir" --quiet
     
-    echo "Cleaning up unnecessary files to reduce layer size..."
-    
-    # Remove Python cache files
-    find "$installation_dir" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-    find "$installation_dir" -name "*.pyc" -delete 2>/dev/null || true
-    find "$installation_dir" -name "*.pyo" -delete 2>/dev/null || true
-    
-    # Remove package metadata (dist-info and egg-info)
-    find "$installation_dir" -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-    find "$installation_dir" -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-    
-    # Remove test files and documentation
-    find "$installation_dir" -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-    find "$installation_dir" -type d -name "test" -exec rm -rf {} + 2>/dev/null || true
-    find "$installation_dir" -name "*.md" -delete 2>/dev/null || true
-    find "$installation_dir" -name "*.txt" -delete 2>/dev/null || true
-    find "$installation_dir" -name "*.rst" -delete 2>/dev/null || true
-    
-    # Remove unnecessary pandas files (keep only essential components)
-    if [ -d "$installation_dir/pandas" ]; then
-        find "$installation_dir/pandas" -name "*.pyx" -delete 2>/dev/null || true
-        find "$installation_dir/pandas" -name "*.pxd" -delete 2>/dev/null || true
-        find "$installation_dir/pandas" -name "*.pxi" -delete 2>/dev/null || true
-    fi
-    
-    # Remove numpy test files
-    if [ -d "$installation_dir/numpy" ]; then
-        find "$installation_dir/numpy" -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-        find "$installation_dir/numpy" -name "*.pyx" -delete 2>/dev/null || true
-        find "$installation_dir/numpy" -name "*.pxd" -delete 2>/dev/null || true
-    fi
-    
-    # Remove boto3 documentation and examples
-    if [ -d "$installation_dir/boto3" ]; then
-        find "$installation_dir/boto3" -name "*.md" -delete 2>/dev/null || true
-        find "$installation_dir/boto3" -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
-    fi
-    
-    # Remove botocore documentation and examples
-    if [ -d "$installation_dir/botocore" ]; then
-        find "$installation_dir/botocore" -name "*.md" -delete 2>/dev/null || true
-        find "$installation_dir/botocore" -type d -name "examples" -exec rm -rf {} + 2>/dev/null || true
-    fi
-    
-    # Remove yfinance documentation
-    if [ -d "$installation_dir/yfinance" ]; then
-        find "$installation_dir/yfinance" -name "*.md" -delete 2>/dev/null || true
-    fi
-    
-    # Remove requests documentation
-    if [ -d "$installation_dir/requests" ]; then
-        find "$installation_dir/requests" -name "*.md" -delete 2>/dev/null || true
-    fi
-    
-    # Remove python-dateutil documentation
-    if [ -d "$installation_dir/dateutil" ]; then
-        find "$installation_dir/dateutil" -name "*.md" -delete 2>/dev/null || true
-    fi
-    
-    # Remove empty directories
-    find "$installation_dir" -type d -empty -delete 2>/dev/null || true
-    
     # Show final layer size and contents
-    echo "Layer cleanup completed for $layer_name!"
     local layer_size=$(du -sh "$installation_dir" | cut -f1)
     local package_count=$(ls "$installation_dir" | wc -l)
     echo "✓ $layer_name layer built successfully (${layer_size}, ${package_count} packages)"
@@ -102,7 +39,7 @@ package_layer() {
     local layer_dir="$2"
     
     # Define installation directory (same as in install_layer_dependencies)
-    local installation_dir="$layer_dir/create_layer/python/site-packages"
+    local installation_dir="$layer_dir/create_layer/python"
     
     echo "Packaging layer: $layer_name..."
     
