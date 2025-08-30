@@ -7,11 +7,10 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface ModelSavingProps {
-  environment: string;
   accountId: string;
   region: string;
   trainingRole: iam.Role;
@@ -29,8 +28,9 @@ export class ModelSavingConstruct extends Construct {
     super(scope, id);
 
     // S3 bucket for model artifacts
-    this.artifactsBucket = new s3.Bucket(this, RESOURCE_NAMES.ARTIFACTS_BUCKET, {
-      bucketName: `${DefaultIdBuilder.build('artifacts')}-${props.environment}-${props.accountId}`,
+    const artifactsBucketId = DefaultIdBuilder.build('artifacts-bucket');
+    this.artifactsBucket = new s3.Bucket(this, artifactsBucketId, {
+      bucketName: `${artifactsBucketId}-${props.accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -56,8 +56,9 @@ export class ModelSavingConstruct extends Construct {
     });
 
     // DynamoDB table for model registry
-    this.registryTable = new dynamodb.Table(this, RESOURCE_NAMES.REGISTRY_TABLE, {
-      tableName: DefaultIdBuilder.build('model-registry'),
+    const registryTableId = DefaultIdBuilder.build('model-registry-table');
+    this.registryTable = new dynamodb.Table(this, registryTableId, {
+      tableName: registryTableId,
       partitionKey: { name: 'modelId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'version', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -83,14 +84,14 @@ export class ModelSavingConstruct extends Construct {
     });
 
     // Lambda function for model registration
-    this.modelRegistrar = new lambda.Function(this, 'ModelRegistrar', {
+    const modelRegistrarId = DefaultIdBuilder.build('model-registrar');
+    this.modelRegistrar = new lambda.Function(this, modelRegistrarId, {
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('../lambda/model-registry'),
       environment: {
         DYNAMODB_TABLE: this.registryTable.tableName,
         S3_BUCKET: this.artifactsBucket.bucketName,
-        ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
       memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
@@ -102,14 +103,14 @@ export class ModelSavingConstruct extends Construct {
     });
 
     // Lambda function for model promotion
-    this.modelPromoter = new lambda.Function(this, 'ModelPromoter', {
+    const modelPromoterId = DefaultIdBuilder.build('model-promoter');
+    this.modelPromoter = new lambda.Function(this, modelPromoterId, {
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'model_promoter.handler',
       code: lambda.Code.fromAsset('../lambda/model-registry'),
       environment: {
         DYNAMODB_TABLE: this.registryTable.tableName,
         S3_BUCKET: this.artifactsBucket.bucketName,
-        ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
       memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
@@ -131,8 +132,9 @@ export class ModelSavingConstruct extends Construct {
     this.registryTable.grantReadWriteData(props.trainingRole);
 
     // EventBridge rule for model registration (triggered by training completion)
-    const modelRegistrationRule = new events.Rule(this, 'ModelRegistrationRule', {
-      ruleName: DefaultIdBuilder.build('model-registration-rule'),
+    const modelRegistrationRuleId = DefaultIdBuilder.build('model-registration-rule');
+    const modelRegistrationRule = new events.Rule(this, modelRegistrationRuleId, {
+      ruleName: modelRegistrationRuleId,
       eventPattern: {
         source: ['aws.states'],
         detailType: ['Step Functions Execution Status Changed'],
@@ -153,8 +155,9 @@ export class ModelSavingConstruct extends Construct {
     });
 
     // EventBridge rule for model promotion (manual trigger)
-    const modelPromotionRule = new events.Rule(this, 'ModelPromotionRule', {
-      ruleName: DefaultIdBuilder.build('model-promotion-rule'),
+    const modelPromotionRuleId = DefaultIdBuilder.build('model-promotion-rule');
+    const modelPromotionRule = new events.Rule(this, modelPromotionRuleId, {
+      ruleName: modelPromotionRuleId,
       eventPattern: {
         source: ['macro-causal.model-promotion'],
         detailType: ['ModelPromotionRequest']

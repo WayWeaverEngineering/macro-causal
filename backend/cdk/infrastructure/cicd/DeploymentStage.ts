@@ -16,7 +16,6 @@ import { ApiDataCollectionStack } from "../stacks/ApiDataCollectionStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
-  environment: string;
 }
 
 export class DeploymentStage extends Stage {
@@ -36,7 +35,6 @@ export class DeploymentStage extends Stage {
 
     // VPC Stack (foundation)
     const vpcStack = new VPCStack(this, DefaultIdBuilder.build('vpc-stack'), {
-      environment: props.environment,
       accountId: this.account || '',
       region: this.region || 'us-east-1',
       env: {
@@ -47,7 +45,6 @@ export class DeploymentStage extends Stage {
 
     // Data Lake Stack
     const dataLakeStack = new DataLakeStack(this, DefaultIdBuilder.build('data-lake-stack'), {
-      environment: props.environment,
       vpcStack: vpcStack,
       env: {
         account: this.account,
@@ -57,7 +54,6 @@ export class DeploymentStage extends Stage {
 
     // API Data Collection Stack
     const apiDataCollectionStack = new ApiDataCollectionStack(this, DefaultIdBuilder.build('api-data-collection-stack'), {
-      environment: props.environment,
       vpcStack: vpcStack,
       bronzeBucket: dataLakeStack.dataLake.bronzeBucket,
       env: {
@@ -69,7 +65,6 @@ export class DeploymentStage extends Stage {
     /*
     // ML Training Stack
     const mlTrainingStack = new MLTrainingStack(this, DefaultIdBuilder.build('ml-training-stack'), {
-      environment: props.environment,
       dataLakeStack: dataLakeStack,
       vpcStack: vpcStack,
       env: {
@@ -80,7 +75,6 @@ export class DeploymentStage extends Stage {
 
     // Inference Stack
     const inferenceStack = new InferenceStack(this, DefaultIdBuilder.build('inference-stack'), {
-      environment: props.environment,
       mlTrainingStack: mlTrainingStack,
       vpcStack: vpcStack,
       env: {
@@ -91,7 +85,6 @@ export class DeploymentStage extends Stage {
 
     // Monitoring Stack
     const monitoringStack = new MonitoringStack(this, DefaultIdBuilder.build('monitoring-stack'), {
-      environment: props.environment,
       inferenceStack: inferenceStack,
       mlTrainingStack: mlTrainingStack,
       vpcStack: vpcStack,

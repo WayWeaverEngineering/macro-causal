@@ -7,10 +7,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 
-export interface MLTrainingProps {
-  environment: string;
+export interface MLTrainingProps {  
   accountId: string;
   region: string;
   goldBucket: s3.Bucket;
@@ -26,33 +25,13 @@ export class MLTrainingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: MLTrainingProps) {
     super(scope, id);
 
-    // Create EKS cluster
-    this.eksCluster = new eks.Cluster(this, RESOURCE_NAMES.EKS_CLUSTER, {
-      version: eks.KubernetesVersion.of(MACRO_CAUSAL_CONSTANTS.EKS.KUBERNETES_VERSION),
-      vpc: props.vpc,
-      defaultCapacity: 0, // Use Karpenter for auto-scaling
-      clusterName: DefaultIdBuilder.build('ml-training-cluster'),
-      endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
-      role: new iam.Role(this, 'EKSClusterRole', {
-        assumedBy: new iam.ServicePrincipal('eks.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSClusterPolicy')
-        ]
-      }),
-      kubectlLayer: new lambda.LayerVersion(this, 'KubectlLayer', {
-        code: lambda.Code.fromAsset('kubectl-layer'),
-        compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
-        description: 'Kubectl layer for EKS cluster'
-      })
-    });
-
     // EKS cluster for ML training
-    this.eksCluster = new eks.Cluster(this, RESOURCE_NAMES.EKS_CLUSTER, {
+    const eksClusterId = DefaultIdBuilder.build('ml-training-cluster');
+    this.eksCluster = new eks.Cluster(this, eksClusterId, {
       version: eks.KubernetesVersion.of(MACRO_CAUSAL_CONSTANTS.EKS.KUBERNETES_VERSION),
       vpc: props.vpc,
       defaultCapacity: 0, // Use Karpenter for auto-scaling
-      clusterName: DefaultIdBuilder.build('ml-training-cluster'),
+      clusterName: eksClusterId,
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
       vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
       role: new iam.Role(this, 'EKSClusterRole', {
@@ -69,8 +48,9 @@ export class MLTrainingConstruct extends Construct {
     });
 
     // ECR repository for training images
-    this.trainingRepo = new ecr.Repository(this, 'TrainingRepo', {
-      repositoryName: DefaultIdBuilder.build('ml-training'),
+    const trainingRepoId = DefaultIdBuilder.build('ml-training');
+    this.trainingRepo = new ecr.Repository(this, trainingRepoId, {
+      repositoryName: trainingRepoId,
       imageScanOnPush: true,
       removalPolicy: RemovalPolicy.RETAIN,
       lifecycleRules: [
@@ -82,7 +62,8 @@ export class MLTrainingConstruct extends Construct {
     });
 
     // IAM role for Ray training jobs
-    this.trainingRole = new iam.Role(this, 'TrainingRole', {
+    const trainingRoleId = DefaultIdBuilder.build('ml-training-role');
+    this.trainingRole = new iam.Role(this, trainingRoleId, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSWorkerNodePolicy'),

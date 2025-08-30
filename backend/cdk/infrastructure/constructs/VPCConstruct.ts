@@ -1,11 +1,8 @@
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
 
 export interface VPCProps {
-  environment: string;
   accountId: string;
   region: string;
   maxAzs?: number;
@@ -25,7 +22,8 @@ export class VPCConstruct extends Construct {
     super(scope, id);
 
     // Create VPC with public and private subnets
-    this.vpc = new ec2.Vpc(this, RESOURCE_NAMES.VPC, {
+    const vpcId = DefaultIdBuilder.build('vpc');
+    this.vpc = new ec2.Vpc(this, vpcId, {
       maxAzs: props.maxAzs || 2,
       natGateways: props.natGateways || 1,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -48,15 +46,16 @@ export class VPCConstruct extends Construct {
       ],
       enableDnsHostnames: true,
       enableDnsSupport: true,
-      vpcName: DefaultIdBuilder.build('vpc')
+      vpcName: vpcId
     });
 
     // Create security group for the VPC
-    this.securityGroup = new ec2.SecurityGroup(this, 'VPCSecurityGroup', {
+    const securityGroupId = DefaultIdBuilder.build('vpc-sg');
+    this.securityGroup = new ec2.SecurityGroup(this, securityGroupId, {
       vpc: this.vpc,
       description: 'Security group for Macro Causal VPC',
       allowAllOutbound: true,
-      securityGroupName: DefaultIdBuilder.build('vpc-sg')
+      securityGroupName: securityGroupId
     });
 
     // Allow HTTPS traffic for API calls
@@ -74,7 +73,8 @@ export class VPCConstruct extends Construct {
     );
 
     // VPC Endpoint for S3 (Gateway endpoint)
-    this.vpcEndpointS3 = this.vpc.addGatewayEndpoint('S3Endpoint', {
+    const s3EndpointId = DefaultIdBuilder.build('s3-endpoint');
+    this.vpcEndpointS3 = this.vpc.addGatewayEndpoint(s3EndpointId, {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [
         { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -83,28 +83,32 @@ export class VPCConstruct extends Construct {
     });
 
     // VPC Endpoint for ECR (Interface endpoint)
-    this.vpcEndpointECR = this.vpc.addInterfaceEndpoint('ECREndpoint', {
+    const ecrEndpointId = DefaultIdBuilder.build('ecr-endpoint');
+    this.vpcEndpointECR = this.vpc.addInterfaceEndpoint(ecrEndpointId, {
       service: ec2.InterfaceVpcEndpointAwsService.ECR,
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [this.securityGroup]
     });
 
     // VPC Endpoint for ECR Docker (Interface endpoint)
-    this.vpcEndpointECRDocker = this.vpc.addInterfaceEndpoint('ECRDockerEndpoint', {
+    const ecrDockerEndpointId = DefaultIdBuilder.build('ecr-docker-endpoint');
+    this.vpcEndpointECRDocker = this.vpc.addInterfaceEndpoint(ecrDockerEndpointId, {
       service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [this.securityGroup]
     });
 
     // VPC Endpoint for Secrets Manager (Interface endpoint)
-    this.vpcEndpointSecretsManager = this.vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+    const secretsManagerEndpointId = DefaultIdBuilder.build('secrets-manager-endpoint');
+    this.vpcEndpointSecretsManager = this.vpc.addInterfaceEndpoint(secretsManagerEndpointId, {
       service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [this.securityGroup]
     });
 
     // VPC Endpoint for Systems Manager (Interface endpoint)
-    this.vpcEndpointSSM = this.vpc.addInterfaceEndpoint('SSMEndpoint', {
+    const ssmEndpointId = DefaultIdBuilder.build('ssm-endpoint');
+    this.vpcEndpointSSM = this.vpc.addInterfaceEndpoint(ssmEndpointId, {
       service: ec2.InterfaceVpcEndpointAwsService.SSM,
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [this.securityGroup]

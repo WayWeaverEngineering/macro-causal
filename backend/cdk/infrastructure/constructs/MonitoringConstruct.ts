@@ -7,12 +7,11 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface MonitoringProps {
-  environment: string;
   accountId: string;
   region: string;
   ecsCluster: any; // ecs.Cluster
@@ -33,8 +32,9 @@ export class MonitoringConstruct extends Construct {
     super(scope, id);
 
     // SNS topic for alerts
-    this.alertTopic = new sns.Topic(this, RESOURCE_NAMES.ALERT_TOPIC, {
-      topicName: DefaultIdBuilder.build('alerts'),
+    const alertTopicId = DefaultIdBuilder.build('alerts');
+    this.alertTopic = new sns.Topic(this, alertTopicId, {
+      topicName: alertTopicId,
       displayName: 'Macro Causal Alerts'
     });
 
@@ -45,7 +45,6 @@ export class MonitoringConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/monitoring'),
       environment: {
         SNS_TOPIC_ARN: this.alertTopic.topicArn,
-        ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(1),
       memorySize: 512,
@@ -63,7 +62,6 @@ export class MonitoringConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/monitoring'),
       environment: {
         SNS_TOPIC_ARN: this.alertTopic.topicArn,
-        ENVIRONMENT: props.environment,
         CLOUDWATCH_NAMESPACE: MACRO_CAUSAL_CONSTANTS.CLOUDWATCH.NAMESPACE
       },
       timeout: Duration.minutes(5),
@@ -82,7 +80,6 @@ export class MonitoringConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/monitoring'),
       environment: {
         SNS_TOPIC_ARN: this.alertTopic.topicArn,
-        ENVIRONMENT: props.environment
       },
       timeout: Duration.minutes(5),
       memorySize: 1024,
@@ -100,7 +97,6 @@ export class MonitoringConstruct extends Construct {
       code: lambda.Code.fromAsset('../lambda/monitoring'),
       environment: {
         SNS_TOPIC_ARN: this.alertTopic.topicArn,
-        ENVIRONMENT: props.environment,
         DYNAMODB_TABLE: props.registryTable.tableName
       },
       timeout: Duration.minutes(2),
@@ -138,8 +134,9 @@ export class MonitoringConstruct extends Construct {
     props.registryTable.grantReadData(this.registryHealthMonitor);
 
     // CloudWatch dashboard
-    const dashboard = new cloudwatch.Dashboard(this, 'MonitoringDashboard', {
-      dashboardName: DefaultIdBuilder.build('monitoring-dashboard')
+    const monitoringDashboardId = DefaultIdBuilder.build('monitoring-dashboard');
+    const dashboard = new cloudwatch.Dashboard(this, monitoringDashboardId, {
+      dashboardName: monitoringDashboardId
     });
 
     // ECS metrics
@@ -217,28 +214,31 @@ export class MonitoringConstruct extends Construct {
     );
 
     // CloudWatch alarms
-    const highCpuAlarm = new cloudwatch.Alarm(this, 'HighCPUAlarm', {
+    const highCpuAlarmId = DefaultIdBuilder.build('high-cpu-alarm');
+    const highCpuAlarm = new cloudwatch.Alarm(this, highCpuAlarmId, {
       metric: ecsCpuMetric,
       threshold: 80,
       evaluationPeriods: 2,
       alarmDescription: 'High CPU utilization on ECS service',
-      alarmName: DefaultIdBuilder.build('high-cpu-alarm')
+      alarmName: highCpuAlarmId
     });
 
-    const highMemoryAlarm = new cloudwatch.Alarm(this, 'HighMemoryAlarm', {
+    const highMemoryAlarmId = DefaultIdBuilder.build('high-memory-alarm');
+    const highMemoryAlarm = new cloudwatch.Alarm(this, highMemoryAlarmId, {
       metric: ecsMemoryMetric,
       threshold: 85,
       evaluationPeriods: 2,
       alarmDescription: 'High memory utilization on ECS service',
-      alarmName: DefaultIdBuilder.build('high-memory-alarm')
+      alarmName: highMemoryAlarmId
     });
 
-    const highResponseTimeAlarm = new cloudwatch.Alarm(this, 'HighResponseTimeAlarm', {
+    const highResponseTimeAlarmId = DefaultIdBuilder.build('high-response-time-alarm');
+    const highResponseTimeAlarm = new cloudwatch.Alarm(this, highResponseTimeAlarmId, {
       metric: albTargetResponseTimeMetric,
       threshold: 5000, // 5 seconds
       evaluationPeriods: 2,
       alarmDescription: 'High response time on ALB',
-      alarmName: DefaultIdBuilder.build('high-response-time-alarm')
+      alarmName: highResponseTimeAlarmId
     });
 
     // Add alarms to SNS topic
@@ -247,27 +247,31 @@ export class MonitoringConstruct extends Construct {
     highResponseTimeAlarm.addAlarmAction(new actions.SnsAction(this.alertTopic));
 
     // EventBridge rules for monitoring
-    const performanceMonitoringRule = new events.Rule(this, 'PerformanceMonitoringRule', {
-      ruleName: DefaultIdBuilder.build('performance-monitoring-rule'),
+    const performanceMonitoringRuleId = DefaultIdBuilder.build('performance-monitoring-rule');
+    const performanceMonitoringRule = new events.Rule(this, performanceMonitoringRuleId, {
+      ruleName: performanceMonitoringRuleId,
       schedule: events.Schedule.rate(Duration.hours(1)),
       targets: [new targets.LambdaFunction(this.performanceMonitor)]
     });
 
-    const dataQualityRule = new events.Rule(this, 'DataQualityRule', {
-      ruleName: DefaultIdBuilder.build('data-quality-rule'),
+    const dataQualityRuleId = DefaultIdBuilder.build('data-quality-rule');
+    const dataQualityRule = new events.Rule(this, dataQualityRuleId, {
+      ruleName: dataQualityRuleId,
       schedule: events.Schedule.rate(Duration.hours(6)),
       targets: [new targets.LambdaFunction(this.dataQualityMonitor)]
     });
 
-    const registryHealthRule = new events.Rule(this, 'RegistryHealthRule', {
-      ruleName: DefaultIdBuilder.build('registry-health-rule'),
+    const registryHealthRuleId = DefaultIdBuilder.build('registry-health-rule');
+    const registryHealthRule = new events.Rule(this, registryHealthRuleId, {
+      ruleName: registryHealthRuleId,
       schedule: events.Schedule.rate(Duration.days(1)),
       targets: [new targets.LambdaFunction(this.registryHealthMonitor)]
     });
 
     // Drift detection rule (triggered by Evidently)
-    const driftDetectionRule = new events.Rule(this, 'DriftDetectionRule', {
-      ruleName: DefaultIdBuilder.build('drift-detection-rule'),
+    const driftDetectionRuleId = DefaultIdBuilder.build('drift-detection-rule');
+    const driftDetectionRule = new events.Rule(this, driftDetectionRuleId, {
+      ruleName: driftDetectionRuleId,
       eventPattern: {
         source: ['aws.evidently'],
         detailType: ['Evidently Drift Detection'],

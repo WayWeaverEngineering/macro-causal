@@ -2,10 +2,8 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VPCConstruct } from '../constructs/VPCConstruct';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
 
 export interface VPCStackProps extends StackProps {
-  environment: string;
   accountId: string;
   region: string;
 }
@@ -17,17 +15,12 @@ export class VPCStack extends Stack {
     super(scope, id, props);
 
     // Create VPC construct
-    this.vpcConstruct = new VPCConstruct(this, RESOURCE_NAMES.VPC_CONSTRUCT, {
-      environment: props.environment,
+    const vpcId = DefaultIdBuilder.build('vpc');
+    this.vpcConstruct = new VPCConstruct(this, vpcId, {
       accountId: props.accountId,
       region: props.region,
       maxAzs: 2,
       natGateways: 1
     });
-
-    // Add tags to the stack
-    this.tags.setTag('Environment', props.environment);
-    this.tags.setTag('Project', 'MacroCausal');
-    this.tags.setTag('Component', 'VPC');
   }
 }

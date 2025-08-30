@@ -1,11 +1,10 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { RESOURCE_NAMES } from '../../utils/Constants';
 import { ApiDataCollectionConstruct } from '../constructs/ApiDataCollectionConstruct';
 import { VPCStack } from './VPCStack';
+import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface ApiDataCollectionStackProps extends StackProps {
-  environment: string;
   vpcStack: VPCStack;
   bronzeBucket: any; // s3.Bucket
 }
@@ -17,16 +16,11 @@ export class ApiDataCollectionStack extends Stack {
     super(scope, id, props);
 
     // API Data Collection construct
-    this.apiDataCollection = new ApiDataCollectionConstruct(this, RESOURCE_NAMES.API_DATA_COLLECTION_CONSTRUCT, {
-      environment: props.environment,
+    const apiDataCollectionConstructId = DefaultIdBuilder.build('api-data-collection');
+    this.apiDataCollection = new ApiDataCollectionConstruct(this, apiDataCollectionConstructId, {
       bronzeBucket: props.bronzeBucket,
       vpc: props.vpcStack.vpcConstruct.vpc,
       securityGroup: props.vpcStack.vpcConstruct.securityGroup
     });
-
-    // Add tags to the stack
-    this.tags.setTag('Environment', props.environment);
-    this.tags.setTag('Project', 'MacroCausal');
-    this.tags.setTag('Component', 'APIDataCollection');
   }
 }

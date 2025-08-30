@@ -4,10 +4,9 @@ import * as emrserverless from 'aws-cdk-lib/aws-emrserverless';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 
 export interface DataLakeProps {
-  environment: string;
   accountId: string;
   region: string;
 }
@@ -24,8 +23,9 @@ export class DataLakeConstruct extends Construct {
     super(scope, id);
 
     // Bronze bucket for raw data
-    this.bronzeBucket = new s3.Bucket(this, RESOURCE_NAMES.BRONZE_BUCKET, {
-      bucketName: `${DefaultIdBuilder.build('bronze')}-${props.environment}-${props.accountId}`,
+    const bronzeBucketId = DefaultIdBuilder.build('bronze-bucket');
+    this.bronzeBucket = new s3.Bucket(this, bronzeBucketId, {
+      bucketName: `${bronzeBucketId}-${props.accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -51,8 +51,9 @@ export class DataLakeConstruct extends Construct {
     });
 
     // Silver bucket for processed data
-    this.silverBucket = new s3.Bucket(this, RESOURCE_NAMES.SILVER_BUCKET, {
-      bucketName: `${DefaultIdBuilder.build('silver')}-${props.environment}-${props.accountId}`,
+    const silverBucketId = DefaultIdBuilder.build('silver-bucket');
+    this.silverBucket = new s3.Bucket(this, silverBucketId, {
+      bucketName: `${silverBucketId}-${props.accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -74,8 +75,9 @@ export class DataLakeConstruct extends Construct {
     });
 
     // Gold bucket for feature-engineered data
-    this.goldBucket = new s3.Bucket(this, RESOURCE_NAMES.GOLD_BUCKET, {
-      bucketName: `${DefaultIdBuilder.build('gold')}-${props.environment}-${props.accountId}`,
+    const goldBucketId = DefaultIdBuilder.build('gold-bucket');
+    this.goldBucket = new s3.Bucket(this, goldBucketId, {
+      bucketName: `${goldBucketId}-${props.accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -91,8 +93,9 @@ export class DataLakeConstruct extends Construct {
     });
 
     // Logs bucket for EMR and other logs
-    this.logsBucket = new s3.Bucket(this, RESOURCE_NAMES.LOGS_BUCKET, {
-      bucketName: `${DefaultIdBuilder.build('logs')}-${props.environment}-${props.accountId}`,
+    const logsBucketId = DefaultIdBuilder.build('logs-bucket');
+    this.logsBucket = new s3.Bucket(this, logsBucketId, {
+      bucketName: `${logsBucketId}-${props.accountId}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -108,9 +111,10 @@ export class DataLakeConstruct extends Construct {
     });
 
     // EMR Serverless application
-    this.emrApplication = new emrserverless.CfnApplication(this, RESOURCE_NAMES.EMR_APPLICATION, {
+    const emrApplicationId = DefaultIdBuilder.build('emr-application');
+    this.emrApplication = new emrserverless.CfnApplication(this, emrApplicationId, {
       type: 'SPARK',
-      name: DefaultIdBuilder.build('emr-serverless'),
+      name: emrApplicationId,
       releaseLabel: MACRO_CAUSAL_CONSTANTS.EMR.RELEASE_LABEL,
       initialCapacity: [
         {
@@ -141,7 +145,8 @@ export class DataLakeConstruct extends Construct {
     });
 
     // EMR execution role
-    this.emrRole = new iam.Role(this, 'EMRExecutionRole', {
+    const emrExecutionRoleId = DefaultIdBuilder.build('emr-execution-role');
+    this.emrRole = new iam.Role(this, emrExecutionRoleId, {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSEMRServerlessServiceRolePolicy')

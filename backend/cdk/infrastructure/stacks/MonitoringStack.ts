@@ -1,11 +1,10 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { RESOURCE_NAMES } from '../../utils/Constants';
 import { MonitoringConstruct } from '../constructs/MonitoringConstruct';
+import { DefaultIdBuilder } from '../../utils/Naming';
 import { VPCStack } from './VPCStack';
 
 export interface MonitoringStackProps extends StackProps {
-  environment: string;
   inferenceStack: any; // InferenceStack
   mlTrainingStack: any; // MLTrainingStack
   vpcStack: VPCStack;
@@ -18,8 +17,8 @@ export class MonitoringStack extends Stack {
     super(scope, id, props);
 
     // Monitoring construct
-    this.monitoring = new MonitoringConstruct(this, RESOURCE_NAMES.MONITORING_CONSTRUCT, {
-      environment: props.environment,
+    const monitoringId = DefaultIdBuilder.build('monitoring');
+    this.monitoring = new MonitoringConstruct(this, monitoringId, {
       accountId: this.account,
       region: this.region,
       ecsCluster: props.inferenceStack.inference.ecsCluster,

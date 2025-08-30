@@ -1,12 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { RESOURCE_NAMES } from '../../utils/Constants';
 import { MLTrainingConstruct } from '../constructs/MLTrainingConstruct';
 import { ModelSavingConstruct } from '../constructs/ModelSavingConstruct';
 import { VPCStack } from './VPCStack';
+import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface MLTrainingStackProps extends StackProps {
-  environment: string;
   dataLakeStack: any; // DataLakeStack
   vpcStack: VPCStack;
 }
@@ -19,8 +18,8 @@ export class MLTrainingStack extends Stack {
     super(scope, id, props);
 
     // ML Training construct
-    this.mlTraining = new MLTrainingConstruct(this, RESOURCE_NAMES.ML_TRAINING_CONSTRUCT, {
-      environment: props.environment,
+    const mlTrainingId = DefaultIdBuilder.build('ml-training');
+    this.mlTraining = new MLTrainingConstruct(this, mlTrainingId, {
       accountId: this.account,
       region: this.region,
       goldBucket: props.dataLakeStack.dataLake.goldBucket,
@@ -29,8 +28,8 @@ export class MLTrainingStack extends Stack {
     });
 
     // Model Saving construct
-    this.modelSaving = new ModelSavingConstruct(this, RESOURCE_NAMES.MODEL_SAVING_CONSTRUCT, {
-      environment: props.environment,
+    const modelSavingId = DefaultIdBuilder.build('model-saving');
+    this.modelSaving = new ModelSavingConstruct(this, modelSavingId, {
       accountId: this.account,
       region: this.region,
       trainingRole: this.mlTraining.trainingRole,

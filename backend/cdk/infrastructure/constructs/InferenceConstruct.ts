@@ -9,10 +9,9 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 
 export interface InferenceProps {
-  environment: string;
   accountId: string;
   region: string;
   vpc: ec2.IVpc;
@@ -30,7 +29,8 @@ export class InferenceConstruct extends Construct {
     super(scope, id);
 
     // ECS cluster
-    this.ecsCluster = new ecs.Cluster(this, RESOURCE_NAMES.ECS_CLUSTER, {
+    const ecsClusterId = DefaultIdBuilder.build('inference-cluster');
+    this.ecsCluster = new ecs.Cluster(this, ecsClusterId, {
       vpc: props.vpc,
       clusterName: DefaultIdBuilder.build('inference-cluster'),
       containerInsights: true,
@@ -42,7 +42,8 @@ export class InferenceConstruct extends Construct {
     });
 
     // Application Load Balancer
-    this.alb = new elbv2.ApplicationLoadBalancer(this, RESOURCE_NAMES.ALB, {
+    const albId = DefaultIdBuilder.build('inference-alb');
+    this.alb = new elbv2.ApplicationLoadBalancer(this, albId, {
       vpc: props.vpc,
       internetFacing: true,
       loadBalancerName: DefaultIdBuilder.build('inference-alb'),
@@ -50,7 +51,8 @@ export class InferenceConstruct extends Construct {
     });
 
     // Target groups for blue/green deployment
-    const blueTargetGroup = new elbv2.ApplicationTargetGroup(this, 'BlueTargetGroup', {
+    const blueTargetGroupId = DefaultIdBuilder.build('blue-target-group');
+    const blueTargetGroup = new elbv2.ApplicationTargetGroup(this, blueTargetGroupId, {
       vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -65,7 +67,8 @@ export class InferenceConstruct extends Construct {
       }
     });
 
-    const greenTargetGroup = new elbv2.ApplicationTargetGroup(this, 'GreenTargetGroup', {
+    const greenTargetGroupId = DefaultIdBuilder.build('green-target-group');
+    const greenTargetGroup = new elbv2.ApplicationTargetGroup(this, greenTargetGroupId, {
       vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -88,7 +91,8 @@ export class InferenceConstruct extends Construct {
     });
 
     // IAM role for ECS tasks
-    this.inferenceRole = new iam.Role(this, 'InferenceTaskRole', {
+    const inferenceTaskRoleId = DefaultIdBuilder.build('inference-task-role');
+    this.inferenceRole = new iam.Role(this, inferenceTaskRoleId, {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')
@@ -126,7 +130,8 @@ export class InferenceConstruct extends Construct {
     }));
 
     // Task definition for FastAPI service
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'FastAPITaskDefinition', {
+    const fastApiTaskDefinitionId = DefaultIdBuilder.build('fastapi-task-definition');
+    const taskDefinition = new ecs.FargateTaskDefinition(this, fastApiTaskDefinitionId, {
       memoryLimitMiB: MACRO_CAUSAL_CONSTANTS.ECS.MEMORY_MIB,
       cpu: MACRO_CAUSAL_CONSTANTS.ECS.CPU,
       executionRole: this.inferenceRole,
@@ -134,12 +139,12 @@ export class InferenceConstruct extends Construct {
     });
 
     // Add FastAPI container
-    const fastAPIContainer = taskDefinition.addContainer('FastAPIContainer', {
+    const fastApiContainerId = DefaultIdBuilder.build('fastapi-container');
+    const fastAPIContainer = taskDefinition.addContainer(fastApiContainerId, {
       image: ecs.ContainerImage.fromAsset('../ml'),
       containerName: 'fastapi-app',
       portMappings: [{ containerPort: 8000 }],
       environment: {
-        ENVIRONMENT: props.environment,
         S3_BUCKET: props.artifactsBucket.bucketName,
         DYNAMODB_TABLE: props.registryTable.tableName,
         LOG_LEVEL: 'INFO'
@@ -158,7 +163,8 @@ export class InferenceConstruct extends Construct {
     });
 
     // Fargate service
-    this.fastAPIService = new ecs.FargateService(this, 'FastAPIService', {
+    const fastApiServiceId = DefaultIdBuilder.build('fastapi-service');
+    this.fastAPIService = new ecs.FargateService(this, fastApiServiceId, {
       cluster: this.ecsCluster,
       taskDefinition: taskDefinition,
       serviceName: DefaultIdBuilder.build('fastapi-service'),
@@ -192,7 +198,8 @@ export class InferenceConstruct extends Construct {
     });
 
     // Security group for ALB
-    const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+    const albSecurityGroupId = DefaultIdBuilder.build('alb-security-group');
+    const albSecurityGroup = new ec2.SecurityGroup(this, albSecurityGroupId, {
       vpc: props.vpc,
       description: 'Security group for ALB',
       allowAllOutbound: true
@@ -205,7 +212,8 @@ export class InferenceConstruct extends Construct {
     );
 
     // Security group for ECS tasks
-    const ecsSecurityGroup = new ec2.SecurityGroup(this, 'ECSSecurityGroup', {
+    const ecsSecurityGroupId = DefaultIdBuilder.build('ecs-security-group');
+    const ecsSecurityGroup = new ec2.SecurityGroup(this, ecsSecurityGroupId, {
       vpc: props.vpc,
       description: 'Security group for ECS tasks',
       allowAllOutbound: true

@@ -8,10 +8,9 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS, RESOURCE_NAMES } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 
 export interface DataIngestionProps {
-  environment: string;
   bronzeBucket: any; // s3.Bucket
   emrApplication: any; // emrserverless.CfnApplication
   emrRole: any; // iam.Role
@@ -40,7 +39,6 @@ export class DataIngestionConstruct extends Construct {
       handler: 'index.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
-        ENVIRONMENT: props.environment,
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         STATE_MACHINE_ARN: '' // Will be set after state machine creation
       },
@@ -59,7 +57,6 @@ export class DataIngestionConstruct extends Construct {
       handler: 'start_emr_job.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
-        ENVIRONMENT: props.environment,
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId,
         EMR_ROLE_ARN: props.emrRole.roleArn
@@ -78,7 +75,6 @@ export class DataIngestionConstruct extends Construct {
       handler: 'check_emr_job.handler',
       code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
       environment: {
-        ENVIRONMENT: props.environment,
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId
       },
       vpc: props.vpc,
@@ -89,7 +85,8 @@ export class DataIngestionConstruct extends Construct {
     });
 
     // Step Functions state machine for ingestion workflow
-    this.ingestionStateMachine = new sfn.StateMachine(this, RESOURCE_NAMES.STATE_MACHINE, {
+    const dataIngestionWorkflowId = DefaultIdBuilder.build('data-ingestion-workflow');
+    this.ingestionStateMachine = new sfn.StateMachine(this, dataIngestionWorkflowId, {
       definition: sfn.Chain.start(new tasks.LambdaInvoke(this, 'StartEmrJobTask', {
         lambdaFunction: startEmrJob,
         outputPath: '$.Payload'
@@ -123,12 +120,13 @@ export class DataIngestionConstruct extends Construct {
           })))
         ),
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.STEP_FUNCTIONS.EXECUTION_TIMEOUT_MINUTES),
-      stateMachineName: DefaultIdBuilder.build('data-ingestion-workflow')
+      stateMachineName: dataIngestionWorkflowId
     });
 
     // EventBridge rule for data arrival (S3 object created)
-    this.dataArrivalRule = new events.Rule(this, 'DataArrivalRule', {
-      ruleName: DefaultIdBuilder.build('data-arrival-rule'),
+    const dataArrivalRuleId = DefaultIdBuilder.build('data-arrival-rule');
+    this.dataArrivalRule = new events.Rule(this, dataArrivalRuleId, {
+      ruleName: dataArrivalRuleId,
       eventPattern: {
         source: ['aws.s3'],
         detailType: ['Object Created:Put'],
@@ -149,8 +147,9 @@ export class DataIngestionConstruct extends Construct {
     });
 
     // EventBridge rule for scheduled ingestion (daily batch)
-    this.scheduledIngestionRule = new events.Rule(this, 'ScheduledIngestionRule', {
-      ruleName: DefaultIdBuilder.build('scheduled-ingestion-rule'),
+    const scheduledIngestionRuleId = DefaultIdBuilder.build('scheduled-ingestion-rule');
+    this.scheduledIngestionRule = new events.Rule(this, scheduledIngestionRuleId, {
+      ruleName: scheduledIngestionRuleId,
       schedule: events.Schedule.cron({
         minute: '0',
         hour: '6', // 6 AM UTC

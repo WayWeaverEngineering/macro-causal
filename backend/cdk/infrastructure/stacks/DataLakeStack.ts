@@ -1,12 +1,11 @@
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { RESOURCE_NAMES } from '../../utils/Constants';
 import { DataLakeConstruct } from '../constructs/DataLakeConstruct';
 import { DataIngestionConstruct } from '../constructs/DataIngestionConstruct';
 import { VPCStack } from './VPCStack';
+import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface DataLakeStackProps extends StackProps {
-  environment: string;
   vpcStack: VPCStack;
 }
 
@@ -18,15 +17,15 @@ export class DataLakeStack extends Stack {
     super(scope, id, props);
 
     // Data Lake construct
-    this.dataLake = new DataLakeConstruct(this, RESOURCE_NAMES.DATA_LAKE_CONSTRUCT, {
-      environment: props.environment,
+    const dataLakeId = DefaultIdBuilder.build('data-lake');
+    this.dataLake = new DataLakeConstruct(this, dataLakeId, {
       accountId: this.account,
       region: this.region
     });
 
     // Data Ingestion construct
-    this.dataIngestion = new DataIngestionConstruct(this, RESOURCE_NAMES.DATA_INGESTION_CONSTRUCT, {
-      environment: props.environment,
+    const dataIngestionId = DefaultIdBuilder.build('data-ingestion');
+    this.dataIngestion = new DataIngestionConstruct(this, dataIngestionId, {
       bronzeBucket: this.dataLake.bronzeBucket,
       emrApplication: this.dataLake.emrApplication,
       emrRole: this.dataLake.emrRole,
