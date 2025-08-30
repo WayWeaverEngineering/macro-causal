@@ -2,10 +2,12 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { RESOURCE_NAMES } from '../../utils/Constants';
 import { InferenceConstruct } from '../constructs/InferenceConstruct';
+import { VPCStack } from './VPCStack';
 
 export interface InferenceStackProps extends StackProps {
   environment: string;
   mlTrainingStack: any; // MLTrainingStack
+  vpcStack: VPCStack;
 }
 
 export class InferenceStack extends Stack {
@@ -16,6 +18,7 @@ export class InferenceStack extends Stack {
 
     // Inference construct
     this.inference = new InferenceConstruct(this, RESOURCE_NAMES.INFERENCE_CONSTRUCT, {
+      vpc: props.vpcStack.vpcConstruct.vpc,
       environment: props.environment,
       accountId: this.account,
       region: this.region,

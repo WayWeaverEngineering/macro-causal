@@ -13,14 +13,14 @@ import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 import { SubnetType } from 'aws-cdk-lib/aws-ec2';
 
-export interface APIDataCollectionProps {
+export interface ApiDataCollectionProps {
   environment: string;
   bronzeBucket: s3.Bucket;
   vpc: ec2.IVpc;
   securityGroup: ec2.ISecurityGroup;
 }
 
-export class APIDataCollectionConstruct extends Construct {
+export class ApiDataCollectionConstruct extends Construct {
   public readonly fredCollector: lambda.Function;
   public readonly worldBankCollector: lambda.Function;
   public readonly yahooFinanceCollector: lambda.Function;
@@ -28,7 +28,7 @@ export class APIDataCollectionConstruct extends Construct {
   public readonly scheduledCollectionRule: events.Rule;
   public readonly apiSecrets: secretsmanager.Secret;
 
-  constructor(scope: Construct, id: string, props: APIDataCollectionProps) {
+  constructor(scope: Construct, id: string, props: ApiDataCollectionProps) {
     super(scope, id);
 
     // Create Secrets Manager secret for API keys

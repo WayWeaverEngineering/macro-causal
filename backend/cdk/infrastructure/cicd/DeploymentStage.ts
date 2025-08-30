@@ -9,10 +9,10 @@ import {
 import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionStack";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { VPCStack } from "../stacks/VPCStack";
-import { APIDataCollectionStack } from "../stacks/APIDataCollectionStack";
 import { MLTrainingStack } from "../stacks/MLTrainingStack";
 import { InferenceStack } from "../stacks/InferenceStack";
 import { MonitoringStack } from "../stacks/MonitoringStack";
+import { ApiDataCollectionStack } from "../stacks/ApiDataCollectionStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -56,7 +56,7 @@ export class DeploymentStage extends Stage {
     });
 
     // API Data Collection Stack
-    const apiDataCollectionStack = new APIDataCollectionStack(this, DefaultIdBuilder.build('api-data-collection-stack'), {
+    const apiDataCollectionStack = new ApiDataCollectionStack(this, DefaultIdBuilder.build('api-data-collection-stack'), {
       environment: props.environment,
       vpcStack: vpcStack,
       bronzeBucket: dataLakeStack.dataLake.bronzeBucket,
@@ -81,6 +81,7 @@ export class DeploymentStage extends Stage {
     const inferenceStack = new InferenceStack(this, DefaultIdBuilder.build('inference-stack'), {
       environment: props.environment,
       mlTrainingStack: mlTrainingStack,
+      vpcStack: vpcStack,
       env: {
         account: this.account,
         region: this.region

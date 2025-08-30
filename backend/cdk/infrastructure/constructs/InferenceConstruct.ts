@@ -15,7 +15,7 @@ export interface InferenceProps {
   environment: string;
   accountId: string;
   region: string;
-  vpc?: ec2.IVpc;
+  vpc: ec2.IVpc;
   artifactsBucket: s3.Bucket;
   registryTable: dynamodb.Table;
 }
@@ -29,27 +29,9 @@ export class InferenceConstruct extends Construct {
   constructor(scope: Construct, id: string, props: InferenceProps) {
     super(scope, id);
 
-    // VPC for ECS cluster
-    const vpc = props.vpc || new ec2.Vpc(this, 'InferenceVPC', {
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        }
-      ]
-    });
-
     // ECS cluster
     this.ecsCluster = new ecs.Cluster(this, RESOURCE_NAMES.ECS_CLUSTER, {
-      vpc: vpc,
+      vpc: props.vpc,
       clusterName: DefaultIdBuilder.build('inference-cluster'),
       containerInsights: true,
       enableFargateCapacityProviders: true,
@@ -61,7 +43,7 @@ export class InferenceConstruct extends Construct {
 
     // Application Load Balancer
     this.alb = new elbv2.ApplicationLoadBalancer(this, RESOURCE_NAMES.ALB, {
-      vpc: vpc,
+      vpc: props.vpc,
       internetFacing: true,
       loadBalancerName: DefaultIdBuilder.build('inference-alb'),
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC }
@@ -69,7 +51,7 @@ export class InferenceConstruct extends Construct {
 
     // Target groups for blue/green deployment
     const blueTargetGroup = new elbv2.ApplicationTargetGroup(this, 'BlueTargetGroup', {
-      vpc: vpc,
+      vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
@@ -84,7 +66,7 @@ export class InferenceConstruct extends Construct {
     });
 
     const greenTargetGroup = new elbv2.ApplicationTargetGroup(this, 'GreenTargetGroup', {
-      vpc: vpc,
+      vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
@@ -211,7 +193,7 @@ export class InferenceConstruct extends Construct {
 
     // Security group for ALB
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
-      vpc: vpc,
+      vpc: props.vpc,
       description: 'Security group for ALB',
       allowAllOutbound: true
     });
@@ -224,7 +206,7 @@ export class InferenceConstruct extends Construct {
 
     // Security group for ECS tasks
     const ecsSecurityGroup = new ec2.SecurityGroup(this, 'ECSSecurityGroup', {
-      vpc: vpc,
+      vpc: props.vpc,
       description: 'Security group for ECS tasks',
       allowAllOutbound: true
     });
