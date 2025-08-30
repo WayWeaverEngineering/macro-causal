@@ -24,8 +24,8 @@ export class CloudFrontDistributionStack extends Stack {
     );
 
     const websiteDomainNames = [
-      "www.sec-ai-analyst.wayweaver.com",
-      "sec-ai-analyst.wayweaver.com"
+      "www.macro-ai-analyst.wayweaver.com",
+      "macro-ai-analyst.wayweaver.com"
     ]
 
     const distBucketId = DefaultIdBuilder.build('dist-bucket');
