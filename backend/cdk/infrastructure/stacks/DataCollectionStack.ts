@@ -43,8 +43,9 @@ export class DataCollectionStack extends Stack {
       description: 'Collects economic indicators from FRED API',
       layers: [
         props.pythonLambdaLayersStack.botoLambdaLayer,
-        props.pythonLambdaLayersStack.utilsLambdaLayer,
-        props.pythonLambdaLayersStack.pandasLambdaLayer
+        props.pythonLambdaLayersStack.pandasLambdaLayer,
+        props.pythonLambdaLayersStack.requestsLambdaLayer,
+        props.pythonLambdaLayersStack.dateutilsLambdaLayer
       ]
     });
 
@@ -58,8 +59,9 @@ export class DataCollectionStack extends Stack {
       description: 'Collects economic indicators from World Bank API',
       layers: [
         props.pythonLambdaLayersStack.botoLambdaLayer,
-        props.pythonLambdaLayersStack.utilsLambdaLayer,
-        props.pythonLambdaLayersStack.pandasLambdaLayer
+        props.pythonLambdaLayersStack.pandasLambdaLayer,
+        props.pythonLambdaLayersStack.requestsLambdaLayer,
+        props.pythonLambdaLayersStack.dateutilsLambdaLayer
       ]
     });
 
@@ -73,8 +75,9 @@ export class DataCollectionStack extends Stack {
       description: 'Collects market data from Yahoo Finance API',
       layers: [
         props.pythonLambdaLayersStack.botoLambdaLayer,
-        props.pythonLambdaLayersStack.utilsLambdaLayer,
         props.pythonLambdaLayersStack.pandasLambdaLayer,
+        props.pythonLambdaLayersStack.requestsLambdaLayer,
+        props.pythonLambdaLayersStack.dateutilsLambdaLayer,
         props.pythonLambdaLayersStack.yfinanceLambdaLayer
       ]
     });

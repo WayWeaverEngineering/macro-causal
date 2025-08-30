@@ -7,10 +7,11 @@ import { DefaultIdBuilder } from "../../utils/Naming";
 export class PythonLambdaLayersStack extends Stack {
 
   public readonly botoLambdaLayer: lambda.LayerVersion;
-  public readonly utilsLambdaLayer: lambda.LayerVersion;
   public readonly numpyLambdaLayer: lambda.LayerVersion;
   public readonly pandasLambdaLayer: lambda.LayerVersion;
   public readonly yfinanceLambdaLayer: lambda.LayerVersion;
+  public readonly requestsLambdaLayer: lambda.LayerVersion;
+  public readonly dateutilsLambdaLayer: lambda.LayerVersion;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -23,12 +24,20 @@ export class PythonLambdaLayersStack extends Stack {
       layerVersionName: botoLambdaLayerId
     });
 
-    const utilsLambdaLayerId = DefaultIdBuilder.build('utils-lambda-layer');
-    this.utilsLambdaLayer = new lambda.LayerVersion(this, utilsLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('utils')),
+    const requestsLambdaLayerId = DefaultIdBuilder.build('requests-lambda-layer');
+    this.requestsLambdaLayer = new lambda.LayerVersion(this, requestsLambdaLayerId, {
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
-      description: 'Python lambda layer for common utils',
-      layerVersionName: utilsLambdaLayerId
+      description: 'Python lambda layer for requests',
+      layerVersionName: requestsLambdaLayerId
+    });
+
+    const dateutilsLambdaLayerId = DefaultIdBuilder.build('dateutils-lambda-layer');
+    this.dateutilsLambdaLayer = new lambda.LayerVersion(this, dateutilsLambdaLayerId, {
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils')),
+      compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
+      description: 'Python lambda layer for dateutils',
+      layerVersionName: dateutilsLambdaLayerId
     });
 
     const numpyLambdaLayerId = DefaultIdBuilder.build('numpy-lambda-layer');
