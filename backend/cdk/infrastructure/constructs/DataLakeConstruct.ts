@@ -149,7 +149,7 @@ export class DataLakeConstruct extends Construct {
     this.emrRole = new iam.Role(this, emrExecutionRoleId, {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSEMRServerlessServiceRolePolicy')
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEMRServerlessServiceRolePolicy')
       ]
     });
 
