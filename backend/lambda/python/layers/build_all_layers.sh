@@ -15,15 +15,15 @@ install_layer_dependencies() {
     local layer_name="$1"
     local layer_dir="$2"
     
-    # Define installation directory
-    local installation_dir="$layer_dir/create_layer/python/site-packages"
+    # Define installation directory - now directly in python folder
+    local installation_dir="$layer_dir/python"
     
     echo "Installing Python dependencies for $layer_name..."
     
-    # Create directory structure
+    # Create python directory structure
     mkdir -p "$installation_dir"
     
-    # Install dependencies
+    # Install dependencies directly into the python folder
     echo "Installing dependencies from $layer_dir/requirements.txt..."
     pip install -r "$layer_dir/requirements.txt" --target "$installation_dir" --quiet
     
@@ -38,25 +38,22 @@ package_layer() {
     local layer_name="$1"
     local layer_dir="$2"
     
-    # Define installation directory (same as in install_layer_dependencies)
-    local installation_dir="$layer_dir/create_layer/python/site-packages"
-    
     echo "Packaging layer: $layer_name..."
     
-    # Create python directory and copy site-packages contents directly
-    mkdir -p "$layer_dir/python"
-    cp -r "$installation_dir"/* "$layer_dir/python/"
+    # Change to the layer root directory
+    cd "$layer_dir"
     
-    # Create zip file (zip contents directly, not the python folder)
-    cd "$layer_dir/python"
-    zip -r ../python.zip . > /dev/null 2>&1
+    # Create zip file from within the layer root folder, recursively zipping everything
+    zip -r9 ../layer.zip . > /dev/null 2>&1
+    
+    # Return to the original script directory
     cd "$SCRIPT_DIR"
     
     # Clean up intermediate artifacts immediately after packaging
     echo "Cleaning up intermediate artifacts for $layer_name..."
-    rm -rf "$layer_dir/create_layer" "$layer_dir/python" 2>/dev/null || true
+    rm -rf "$layer_dir/python" 2>/dev/null || true
     
-    local zip_size=$(du -h "$layer_dir/python.zip" | cut -f1)
+    local zip_size=$(du -h "$layer_dir/../layer.zip" | cut -f1)
     echo "✓ $layer_name packaged successfully (${zip_size})"
 }
 
@@ -102,7 +99,7 @@ cleanup_layer() {
     local layer_dir="$2"
     
     # Remove build directories and files (quietly)
-    rm -rf "$layer_dir/create_layer" "$layer_dir/python" "$layer_dir/python.zip" 2>/dev/null || true
+    rm -rf "$layer_dir/python" "$layer_dir/../layer.zip" 2>/dev/null || true
 }
 
 # Main execution
