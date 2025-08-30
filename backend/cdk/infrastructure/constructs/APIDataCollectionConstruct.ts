@@ -31,7 +31,7 @@ export class ApiDataCollectionConstruct extends Construct {
     // Create Python dependencies Lambda layer
     const pythonDependenciesLayerId = DefaultIdBuilder.build('python-dependencies-layer');
     const pythonDependenciesLayer = new lambda.LayerVersion(this, pythonDependenciesLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('layers', 'python-dependencies')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('python-dependencies')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python dependencies for API collectors', 
       layerVersionName: pythonDependenciesLayerId

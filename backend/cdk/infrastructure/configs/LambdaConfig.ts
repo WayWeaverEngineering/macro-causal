@@ -9,4 +9,8 @@ export class LambdaConfig {
   static getLambdaPythonCodePath(subPath: string, handler: string) {
     return `${LambdaConfig.LAMBDA_PYTHON_CODE_FOLDER}/${subPath}/${handler}.py`;
   }
+
+  static getLambdaPythonLayerPath(subPath: string) {
+    return `${LambdaConfig.LAMBDA_PYTHON_CODE_FOLDER}/layers/${subPath}`;
+  }
 }
