@@ -18,7 +18,7 @@ mkdir -p "${SITE_PACKAGES_DIR}"
 
 # Install dependencies to the layer directory
 echo "Installing Python dependencies..."
-pip install -r "${REQUIREMENTS_FILE}" -t "${SITE_PACKAGES_DIR}" --platform manylinux2014_x86_64 --only-binary=all
+pip install -r "${REQUIREMENTS_FILE}" -t "${SITE_PACKAGES_DIR}" --platform manylinux2014_x86_64 --only-binary=:all:
 
 # Clean up unnecessary files to reduce layer size
 echo "Cleaning up layer..."
