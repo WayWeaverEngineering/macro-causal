@@ -140,7 +140,9 @@ export class DataLakeConstruct extends Construct {
         enabled: true
       },
       imageConfiguration: {
-        imageUri: `public.ecr.aws/emr-serverless/spark/emr-${MACRO_CAUSAL_CONSTANTS.EMR.RELEASE_LABEL}:latest`
+        // More details on EMR on EKS releases here:
+        // https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/emr-eks-releases.html
+        imageUri: `public.ecr.aws/emr-serverless/spark/emr-${MACRO_CAUSAL_CONSTANTS.EMR.RELEASE_LABEL}-latest`
       }
     });
 
