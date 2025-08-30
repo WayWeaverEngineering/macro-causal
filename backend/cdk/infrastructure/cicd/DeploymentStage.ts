@@ -66,6 +66,7 @@ export class DeploymentStage extends Stage {
       }
     });
 
+    /*
     // ML Training Stack
     const mlTrainingStack = new MLTrainingStack(this, DefaultIdBuilder.build('ml-training-stack'), {
       environment: props.environment,
@@ -99,15 +100,16 @@ export class DeploymentStage extends Stage {
         region: this.region
       }
     });
+    */
 
     // Add dependencies
     dataLakeStack.addDependency(vpcStack);
     apiDataCollectionStack.addDependency(dataLakeStack);
     apiDataCollectionStack.addDependency(vpcStack);
-    mlTrainingStack.addDependency(dataLakeStack);
-    mlTrainingStack.addDependency(vpcStack);
-    inferenceStack.addDependency(mlTrainingStack);
-    monitoringStack.addDependency(inferenceStack);
-    monitoringStack.addDependency(mlTrainingStack);
+    //mlTrainingStack.addDependency(dataLakeStack);
+    //mlTrainingStack.addDependency(vpcStack);
+    //inferenceStack.addDependency(mlTrainingStack);
+    //monitoringStack.addDependency(inferenceStack);
+    //monitoringStack.addDependency(mlTrainingStack);
   }
 }
