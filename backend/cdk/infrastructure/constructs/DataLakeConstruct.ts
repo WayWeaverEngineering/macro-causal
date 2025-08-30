@@ -146,7 +146,6 @@ export class DataLakeConstruct extends Construct {
         imageUri: `public.ecr.aws/emr-serverless/spark/emr-${MACRO_CAUSAL_CONSTANTS.EMR.RELEASE_LABEL}-latest`
       }
     });
-    */
 
     // EMR execution role
     const emrExecutionRoleId = DefaultIdBuilder.build('emr-execution-role');
@@ -177,5 +176,6 @@ export class DataLakeConstruct extends Construct {
         }
       }));
     });
+    */
   }
 }
