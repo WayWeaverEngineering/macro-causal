@@ -24,6 +24,7 @@ export class DataLakeStack extends Stack {
     });
 
     // Data Ingestion construct
+    /*
     const dataIngestionId = DefaultIdBuilder.build('data-ingestion');
     this.dataIngestion = new DataIngestionConstruct(this, dataIngestionId, {
       bronzeBucket: this.dataLake.bronzeBucket,
@@ -32,5 +33,6 @@ export class DataLakeStack extends Stack {
       vpc: props.vpcStack.vpcConstruct.vpc,
       securityGroup: props.vpcStack.vpcConstruct.securityGroup
     });
+    */
   }
 }
