@@ -22,7 +22,7 @@ install_layer_dependencies() {
     
     # Install dependencies
     echo "Installing dependencies from $layer_dir/requirements.txt..."
-    pip install -r "$layer_dir/requirements.txt" --target "$layer_dir/create_layer/lib/python3.10/site-packages"
+    pip install -r "$layer_dir/requirements.txt" --target "$layer_dir/create_layer/lib/python3.10/site-packages" --quiet
     
     echo "Cleaning up unnecessary files to reduce layer size..."
     
@@ -88,10 +88,9 @@ install_layer_dependencies() {
     
     # Show final layer size and contents
     echo "Layer cleanup completed for $layer_name!"
-    echo "Final layer size: $(du -sh "$layer_dir/create_layer/lib/python3.10/site-packages" | cut -f1)"
-    echo "Number of packages: $(ls "$layer_dir/create_layer/lib/python3.10/site-packages" | wc -l)"
-    echo "Key packages installed:"
-    ls "$layer_dir/create_layer/lib/python3.10/site-packages" | grep -E "(numpy|pandas|boto3|requests|yfinance|dateutil|peewee)" || true
+    local layer_size=$(du -sh "$layer_dir/create_layer/lib/python3.10/site-packages" | cut -f1)
+    local package_count=$(ls "$layer_dir/create_layer/lib/python3.10/site-packages" | wc -l)
+    echo "✓ $layer_name layer built successfully (${layer_size}, ${package_count} packages)"
 }
 
 # Function to package a layer
@@ -107,10 +106,11 @@ package_layer() {
     
     # Create zip file
     cd "$layer_dir"
-    zip -r layer_content.zip python
+    zip -r layer_content.zip python > /dev/null 2>&1
     cd "$SCRIPT_DIR"
     
-    echo "Layer packaged: $layer_dir/layer_content.zip"
+    local zip_size=$(du -h "$layer_dir/layer_content.zip" | cut -f1)
+    echo "✓ $layer_name packaged successfully (${zip_size})"
 }
 
 # Function to build a single layer
@@ -144,8 +144,6 @@ build_layer() {
         return 1
     fi
     
-    echo "Successfully built layer: $layer_name"
-    echo "Layer package: $layer_dir/layer_content.zip"
     echo ""
     
     return 0
@@ -156,9 +154,7 @@ cleanup_layer() {
     local layer_name="$1"
     local layer_dir="$2"
     
-    echo "Cleaning up build artifacts for $layer_name..."
-    
-    # Remove build directories and files
+    # Remove build directories and files (quietly)
     rm -rf "$layer_dir/create_layer" "$layer_dir/python" "$layer_dir/layer_content.zip" 2>/dev/null || true
 }
 
@@ -194,7 +190,8 @@ main() {
         local layer_dir="$SCRIPT_DIR/$dir"
         
         if build_layer "$layer_name" "$layer_dir"; then
-            echo "✓ Successfully built $layer_name"
+            # Success message is already printed in the build function
+            :
         else
             echo "✗ Failed to build $layer_name"
             failed_layers+=("$layer_name")
@@ -207,15 +204,7 @@ main() {
     if [ ${#failed_layers[@]} -eq 0 ]; then
         echo "✓ All layers built successfully!"
         echo ""
-        echo "Layer packages created:"
-        for dir in "${layer_dirs[@]}"; do
-            local layer_name="${dir%/}"
-            local layer_dir="$SCRIPT_DIR/$dir"
-            if [ -f "$layer_dir/layer_content.zip" ]; then
-                local size=$(du -h "$layer_dir/layer_content.zip" | cut -f1)
-                echo "  - $layer_name: $layer_dir/layer_content.zip ($size)"
-            fi
-        done
+        echo "All layer packages created successfully!"
     else
         echo "✗ Some layers failed to build:"
         for layer in "${failed_layers[@]}"; do
