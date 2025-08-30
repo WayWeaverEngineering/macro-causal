@@ -72,31 +72,35 @@ export class DataCollectionStack extends Stack {
       layers: [pythonDependenciesLayer]
     });
 
-    // Step Functions state machine for orchestrated data collection
-    const dataCollectionStateMachineId = DefaultIdBuilder.build('api-data-collection-workflow');
-    this.dataCollectionStateMachine = new sfn.StateMachine(this, dataCollectionStateMachineId, {
-      definition: sfn.Chain.start(new tasks.LambdaInvoke(this, 'CollectFREDData', {
+    // Define the state machine workflow
+    const dataCollectionWorkflow =
+      sfn.Chain.start(new tasks.LambdaInvoke(this, DefaultIdBuilder.build('collect-fred-data'), {
         lambdaFunction: this.fredCollector,
         outputPath: '$.Payload',
         resultPath: '$.fred_data'
       }))
-        .next(new tasks.LambdaInvoke(this, 'CollectWorldBankData', {
-          lambdaFunction: this.worldBankCollector,
-          outputPath: '$.Payload',
-          resultPath: '$.worldbank_data'
-        }))
-        .next(new tasks.LambdaInvoke(this, 'CollectYahooFinanceData', {
-          lambdaFunction: this.yahooFinanceCollector,
-          outputPath: '$.Payload',
-          resultPath: '$.yahoo_finance_data'
-        }))
-        .next(new sfn.Succeed(this, 'DataCollectionCompleted')),
+      .next(new tasks.LambdaInvoke(this, DefaultIdBuilder.build('collect-worldbank-data'), {
+        lambdaFunction: this.worldBankCollector,
+        outputPath: '$.Payload',
+        resultPath: '$.worldbank_data'
+      }))
+      .next(new tasks.LambdaInvoke(this, DefaultIdBuilder.build('collect-yahoo-finance-data'), {
+        lambdaFunction: this.yahooFinanceCollector,
+        outputPath: '$.Payload',
+        resultPath: '$.yahoo_finance_data'
+      }))
+      .next(new sfn.Succeed(this, DefaultIdBuilder.build('data-collection-completed')));
+
+    // Step Functions state machine for orchestrated data collection
+    const dataCollectionStateMachineId = DefaultIdBuilder.build('data-collection-state-machine');
+    this.dataCollectionStateMachine = new sfn.StateMachine(this, dataCollectionStateMachineId, {
+      definitionBody: sfn.DefinitionBody.fromChainable(dataCollectionWorkflow),
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.STEP_FUNCTIONS.EXECUTION_TIMEOUT_MINUTES),
       stateMachineName: dataCollectionStateMachineId
     });
 
     // EventBridge rule for scheduled data collection (daily at 8 AM UTC)
-    const scheduledCollectionRuleId = DefaultIdBuilder.build('scheduled-api-collection-rule');
+    const scheduledCollectionRuleId = DefaultIdBuilder.build('scheduled-data-collection-rule');
     this.scheduledCollectionRule = new events.Rule(this, scheduledCollectionRuleId, {
       ruleName: scheduledCollectionRuleId,
       schedule: events.Schedule.cron({
@@ -111,7 +115,7 @@ export class DataCollectionStack extends Stack {
           input: events.RuleTargetInput.fromObject({
             date: events.EventField.fromPath('$.time'),
             source: 'scheduled',
-            collection_type: 'api_data'
+            collection_type: 'data'
           })
         })
       ]
@@ -121,10 +125,5 @@ export class DataCollectionStack extends Stack {
     props.bronzeBucket.grantReadWrite(this.fredCollector);
     props.bronzeBucket.grantReadWrite(this.worldBankCollector);
     props.bronzeBucket.grantReadWrite(this.yahooFinanceCollector);
-
-    // Grant Step Functions permissions
-    this.dataCollectionStateMachine.grantStartExecution(this.fredCollector);
-    this.dataCollectionStateMachine.grantStartExecution(this.worldBankCollector);
-    this.dataCollectionStateMachine.grantStartExecution(this.yahooFinanceCollector);
   }
 }
