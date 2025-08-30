@@ -4,11 +4,10 @@ set -euo pipefail
 # Script to install Python dependencies for Lambda layer
 echo "Installing Python dependencies..."
 
-# Create virtual environment
-python3.10 -m venv create_layer
-source create_layer/bin/activate
+# Create directory structure directly (no virtual environment needed)
+mkdir -p ./create_layer/lib/python3.10/site-packages
 
-# Install dependencies
+# Install dependencies directly to the target directory
 pip install -r requirements.txt --platform=manylinux2014_x86_64 --only-binary=:all: --target ./create_layer/lib/python3.10/site-packages
 
 echo "Cleaning up unnecessary files to reduce layer size..."
