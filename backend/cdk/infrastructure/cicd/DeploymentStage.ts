@@ -12,6 +12,7 @@ import { MLTrainingStack } from "../stacks/MLTrainingStack";
 import { InferenceStack } from "../stacks/InferenceStack";
 import { MonitoringStack } from "../stacks/MonitoringStack";
 import { DataCollectionStack } from "../stacks/DataCollectionStack";
+import { PythonLambdaLayersStack } from "../stacks/PythonLambdaLayersStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -32,6 +33,9 @@ export class DeploymentStage extends Stage {
 
     const commonUtilsLambdaLayer = lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
 
+    const pythonLambdaLayersStackId = DefaultIdBuilder.build('python-lambda-layers-stack')
+    const pythonLambdaLayersStack = new PythonLambdaLayersStack(this, pythonLambdaLayersStackId)
+
     // Data Lake Stack
     const dataLakeStack = new DataLakeStack(this, DefaultIdBuilder.build('data-lake-stack'), {
       env: {
@@ -42,6 +46,7 @@ export class DeploymentStage extends Stage {
 
     // API Data Collection Stack
     const dataCollectionStack = new DataCollectionStack(this, DefaultIdBuilder.build('data-collection-stack'), {
+      pythonLambdaLayersStack,
       bronzeBucket: dataLakeStack.dataLake.bronzeBucket
     });
 

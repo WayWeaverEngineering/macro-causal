@@ -9,9 +9,11 @@ import { Duration, Stack, StackProps } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 import { LambdaConfig } from '../configs/LambdaConfig';
+import { PythonLambdaLayersStack } from './PythonLambdaLayersStack';
 
 export interface DataCollectionStackProps extends StackProps {
   bronzeBucket: s3.Bucket;
+  pythonLambdaLayersStack: PythonLambdaLayersStack;
 }
 
 export class DataCollectionStack extends Stack {
@@ -23,15 +25,6 @@ export class DataCollectionStack extends Stack {
 
   constructor(scope: Construct, id: string, props: DataCollectionStackProps) {
     super(scope, id, props);
-
-    // Create Python dependencies Lambda layer
-    const dataCollectorsPythonLambdaLayerId = DefaultIdBuilder.build('data-collectors-python-lambda-layer');
-    const dataCollectorsPythonLambdaLayer = new lambda.LayerVersion(this, dataCollectorsPythonLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('data-collectors')),
-      compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
-      description: 'Python lambda layer for data collectors', 
-      layerVersionName: dataCollectorsPythonLambdaLayerId
-    });
 
     const lambdaConfig = {
       runtime: LambdaConfig.DEFAULT_PYTHON_RUNTIME,
@@ -48,7 +41,11 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: fredCollectorLambdaFunctionId,
       description: 'Collects economic indicators from FRED API',
-      layers: [dataCollectorsPythonLambdaLayer]
+      layers: [
+        props.pythonLambdaLayersStack.botoLambdaLayer,
+        props.pythonLambdaLayersStack.utilsLambdaLayer,
+        props.pythonLambdaLayersStack.pandasLambdaLayer
+      ]
     });
 
     // World Bank API Data Collector
@@ -59,7 +56,11 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: worldBankCollectorLambdaFunctionId,
       description: 'Collects economic indicators from World Bank API',
-      layers: [dataCollectorsPythonLambdaLayer]
+      layers: [
+        props.pythonLambdaLayersStack.botoLambdaLayer,
+        props.pythonLambdaLayersStack.utilsLambdaLayer,
+        props.pythonLambdaLayersStack.pandasLambdaLayer
+      ]
     });
 
     // Yahoo Finance API Data Collector
@@ -70,7 +71,12 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: yahooFinanceCollectorLambdaFunctionId,
       description: 'Collects market data from Yahoo Finance API',
-      layers: [dataCollectorsPythonLambdaLayer]
+      layers: [
+        props.pythonLambdaLayersStack.botoLambdaLayer,
+        props.pythonLambdaLayersStack.utilsLambdaLayer,
+        props.pythonLambdaLayersStack.pandasLambdaLayer,
+        props.pythonLambdaLayersStack.yfinanceLambdaLayer
+      ]
     });
 
     // Define the state machine workflow
