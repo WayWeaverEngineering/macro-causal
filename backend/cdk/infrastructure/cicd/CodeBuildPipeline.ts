@@ -91,7 +91,7 @@ export class CodeBuildPipeline extends CodePipeline {
             //"cd ../ml",
             //"pip install -r requirements.txt",
             "echo Synthesizing CDK stack...",
-            "cd ../cdk",
+            "cd ../../cdk",
             "npm ci",
             "npm run build",
             "npx cdk synth"
