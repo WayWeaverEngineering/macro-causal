@@ -48,7 +48,7 @@ export class ApiDataCollectionConstruct extends Construct {
     this.fredCollector = new lambda.Function(this, fredCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'fred_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors', 'fred_collector')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
       functionName: fredCollectorLambdaFunctionId,
       description: 'Collects economic indicators from FRED API',
       layers: [pythonDependenciesLayer],
@@ -64,7 +64,7 @@ export class ApiDataCollectionConstruct extends Construct {
     this.worldBankCollector = new lambda.Function(this, worldBankCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'worldbank_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors', 'worldbank_collector')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
       functionName: worldBankCollectorLambdaFunctionId,
       description: 'Collects economic indicators from World Bank API',
       layers: [pythonDependenciesLayer],
@@ -80,7 +80,7 @@ export class ApiDataCollectionConstruct extends Construct {
     this.yahooFinanceCollector = new lambda.Function(this, yahooFinanceCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'yahoo_finance_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors', 'yahoo_finance_collector')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
       functionName: yahooFinanceCollectorLambdaFunctionId,
       description: 'Collects market data from Yahoo Finance API',
       layers: [pythonDependenciesLayer],

@@ -39,7 +39,7 @@ export class DataIngestionConstruct extends Construct {
     const ingestionTrigger = new lambda.Function(this, ingestionTriggerId, {
       ...lambdaConfig,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'ingestion_trigger')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers')),
       environment: {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         STATE_MACHINE_ARN: '' // Will be set after state machine creation
@@ -58,7 +58,7 @@ export class DataIngestionConstruct extends Construct {
       timeout: Duration.minutes(5),
       memorySize: 1024,
       handler: 'start_emr_job.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'start_emr_job')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers')),
       environment: {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId,
@@ -77,7 +77,7 @@ export class DataIngestionConstruct extends Construct {
       ...lambdaConfig,
       timeout: Duration.minutes(2),
       handler: 'check_emr_job.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'check_emr_job')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers')),
       environment: {
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId
       },

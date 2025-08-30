@@ -8,8 +8,8 @@ export class LambdaConfig {
 
   static readonly LAMBDA_PYTHON_CODE_FOLDER = `${LambdaConfig.LAMBDA_CODE_FOLDER}/python`;
 
-  static getLambdaPythonCodePath(subPath: string, handler: string) {
-    return `${LambdaConfig.LAMBDA_PYTHON_CODE_FOLDER}/${subPath}/${handler}.py`;
+  static getLambdaPythonCodePath(subPath: string) {
+    return `${LambdaConfig.LAMBDA_PYTHON_CODE_FOLDER}/${subPath}`;
   }
 
   static getLambdaPythonLayerPath(subPath: string) {
