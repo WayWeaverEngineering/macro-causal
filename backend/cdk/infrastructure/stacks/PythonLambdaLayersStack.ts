@@ -17,7 +17,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const botoLambdaLayerId = DefaultIdBuilder.build('boto-lambda-layer');
     this.botoLambdaLayer = new lambda.LayerVersion(this, botoLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('boto')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('boto-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for boto',
       layerVersionName: botoLambdaLayerId
@@ -25,7 +25,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const requestsLambdaLayerId = DefaultIdBuilder.build('requests-lambda-layer');
     this.requestsLambdaLayer = new lambda.LayerVersion(this, requestsLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for requests',
       layerVersionName: requestsLambdaLayerId
@@ -33,7 +33,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const dateutilsLambdaLayerId = DefaultIdBuilder.build('dateutils-lambda-layer');
     this.dateutilsLambdaLayer = new lambda.LayerVersion(this, dateutilsLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for dateutils',
       layerVersionName: dateutilsLambdaLayerId
@@ -41,7 +41,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const numpyLambdaLayerId = DefaultIdBuilder.build('numpy-lambda-layer');
     this.numpyLambdaLayer = new lambda.LayerVersion(this, numpyLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('numpy')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('numpy-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for numpy',
       layerVersionName: numpyLambdaLayerId
@@ -49,7 +49,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const pandasLambdaLayerId = DefaultIdBuilder.build('pandas-lambda-layer');
     this.pandasLambdaLayer = new lambda.LayerVersion(this, pandasLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('pandas')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('pandas-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for pandas',
       layerVersionName: pandasLambdaLayerId
