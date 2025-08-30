@@ -8,7 +8,6 @@ import {
 } from "@wayweaver/ariadne";
 import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionStack";
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { VPCStack } from "../stacks/VPCStack";
 import { MLTrainingStack } from "../stacks/MLTrainingStack";
 import { InferenceStack } from "../stacks/InferenceStack";
 import { MonitoringStack } from "../stacks/MonitoringStack";
@@ -33,19 +32,8 @@ export class DeploymentStage extends Stage {
 
     const commonUtilsLambdaLayer = lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
 
-    // VPC Stack (foundation)
-    const vpcStack = new VPCStack(this, DefaultIdBuilder.build('vpc-stack'), {
-      accountId: this.account || '',
-      region: this.region || 'us-east-1',
-      env: {
-        account: this.account,
-        region: this.region
-      }
-    });
-
     // Data Lake Stack
     const dataLakeStack = new DataLakeStack(this, DefaultIdBuilder.build('data-lake-stack'), {
-      vpcStack: vpcStack,
       env: {
         account: this.account,
         region: this.region
@@ -54,12 +42,7 @@ export class DeploymentStage extends Stage {
 
     // API Data Collection Stack
     const dataCollectionStack = new DataCollectionStack(this, DefaultIdBuilder.build('data-collection-stack'), {
-      vpcStack: vpcStack,
-      bronzeBucket: dataLakeStack.dataLake.bronzeBucket,
-      env: {
-        account: this.account,
-        region: this.region
-      }
+      bronzeBucket: dataLakeStack.dataLake.bronzeBucket
     });
 
     /*
@@ -96,9 +79,7 @@ export class DeploymentStage extends Stage {
     */
 
     // Add dependencies
-    dataLakeStack.addDependency(vpcStack);
     dataCollectionStack.addDependency(dataLakeStack);
-    dataCollectionStack.addDependency(vpcStack);
     //mlTrainingStack.addDependency(dataLakeStack);
     //mlTrainingStack.addDependency(vpcStack);
     //inferenceStack.addDependency(mlTrainingStack);

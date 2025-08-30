@@ -17,8 +17,6 @@ export interface MonitoringProps {
   ecsCluster: any; // ecs.Cluster
   alb: any; // elbv2.ApplicationLoadBalancer
   registryTable: any; // dynamodb.Table
-  vpc: ec2.IVpc;
-  securityGroup: ec2.ISecurityGroup;
 }
 
 export class MonitoringConstruct extends Construct {
@@ -48,11 +46,6 @@ export class MonitoringConstruct extends Construct {
       },
       timeout: Duration.minutes(1),
       memorySize: 512,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for performance monitoring
@@ -66,11 +59,6 @@ export class MonitoringConstruct extends Construct {
       },
       timeout: Duration.minutes(5),
       memorySize: 1024,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for data quality monitoring
@@ -83,11 +71,6 @@ export class MonitoringConstruct extends Construct {
       },
       timeout: Duration.minutes(5),
       memorySize: 1024,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for registry health monitoring
@@ -101,11 +84,6 @@ export class MonitoringConstruct extends Construct {
       },
       timeout: Duration.minutes(2),
       memorySize: 512,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Grant permissions to Lambda functions

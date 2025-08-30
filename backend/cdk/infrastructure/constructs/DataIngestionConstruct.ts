@@ -14,9 +14,7 @@ import { LambdaConfig } from '../configs/LambdaConfig';
 export interface DataIngestionProps {
   bronzeBucket: any; // s3.Bucket
   emrApplication: any; // emrserverless.CfnApplication
-  emrRole: any; // iam.Role
-  vpc: ec2.IVpc;
-  securityGroup: ec2.ISecurityGroup;
+  emrRole: any;
 }
 
 export class DataIngestionConstruct extends Construct {
@@ -44,11 +42,6 @@ export class DataIngestionConstruct extends Construct {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         STATE_MACHINE_ARN: '' // Will be set after state machine creation
       },
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function to start EMR job
@@ -64,11 +57,6 @@ export class DataIngestionConstruct extends Construct {
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId,
         EMR_ROLE_ARN: props.emrRole.roleArn
       },
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function to check EMR job status
@@ -81,11 +69,6 @@ export class DataIngestionConstruct extends Construct {
       environment: {
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId
       },
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Step Functions state machine for ingestion workflow

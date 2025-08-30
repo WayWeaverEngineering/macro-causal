@@ -2,12 +2,10 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { MLTrainingConstruct } from '../constructs/MLTrainingConstruct';
 import { ModelSavingConstruct } from '../constructs/ModelSavingConstruct';
-import { VPCStack } from './VPCStack';
 import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface MLTrainingStackProps extends StackProps {
   dataLakeStack: any; // DataLakeStack
-  vpcStack: VPCStack;
 }
 
 export class MLTrainingStack extends Stack {
@@ -24,7 +22,6 @@ export class MLTrainingStack extends Stack {
       region: this.region,
       goldBucket: props.dataLakeStack.dataLake.goldBucket,
       artifactsBucket: props.dataLakeStack.dataLake.artifactsBucket, // This will be created in ModelSavingConstruct
-      vpc: props.vpcStack.vpcConstruct.vpc
     });
 
     // Model Saving construct
@@ -33,8 +30,6 @@ export class MLTrainingStack extends Stack {
       accountId: this.account,
       region: this.region,
       trainingRole: this.mlTraining.trainingRole,
-      vpc: props.vpcStack.vpcConstruct.vpc,
-      securityGroup: props.vpcStack.vpcConstruct.securityGroup
     });
 
     // Grant access to gold bucket for training

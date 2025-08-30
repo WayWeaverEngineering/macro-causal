@@ -1,6 +1,5 @@
 import { Construct } from 'constructs';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -14,14 +13,12 @@ import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 export interface InferenceProps {
   accountId: string;
   region: string;
-  vpc: ec2.IVpc;
   artifactsBucket: s3.Bucket;
   registryTable: dynamodb.Table;
 }
 
 export class InferenceConstruct extends Construct {
   public readonly ecsCluster: ecs.Cluster;
-  public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly fastAPIService: ecs.FargateService;
   public readonly inferenceRole: iam.Role;
 
@@ -31,7 +28,6 @@ export class InferenceConstruct extends Construct {
     // ECS cluster
     const ecsClusterId = DefaultIdBuilder.build('inference-cluster');
     this.ecsCluster = new ecs.Cluster(this, ecsClusterId, {
-      vpc: props.vpc,
       clusterName: DefaultIdBuilder.build('inference-cluster'),
       containerInsights: true,
       enableFargateCapacityProviders: true,
@@ -41,19 +37,9 @@ export class InferenceConstruct extends Construct {
       }
     });
 
-    // Application Load Balancer
-    const albId = DefaultIdBuilder.build('inference-alb');
-    this.alb = new elbv2.ApplicationLoadBalancer(this, albId, {
-      vpc: props.vpc,
-      internetFacing: true,
-      loadBalancerName: DefaultIdBuilder.build('inference-alb'),
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC }
-    });
-
     // Target groups for blue/green deployment
     const blueTargetGroupId = DefaultIdBuilder.build('blue-target-group');
     const blueTargetGroup = new elbv2.ApplicationTargetGroup(this, blueTargetGroupId, {
-      vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
@@ -69,7 +55,6 @@ export class InferenceConstruct extends Construct {
 
     const greenTargetGroupId = DefaultIdBuilder.build('green-target-group');
     const greenTargetGroup = new elbv2.ApplicationTargetGroup(this, greenTargetGroupId, {
-      vpc: props.vpc,
       port: 8000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
@@ -81,13 +66,6 @@ export class InferenceConstruct extends Construct {
         healthyThresholdCount: 2,
         unhealthyThresholdCount: 3
       }
-    });
-
-    // ALB listener
-    const listener = this.alb.addListener('Listener', {
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultTargetGroups: [blueTargetGroup]
     });
 
     // IAM role for ECS tasks
@@ -171,8 +149,6 @@ export class InferenceConstruct extends Construct {
       desiredCount: MACRO_CAUSAL_CONSTANTS.ECS.DESIRED_COUNT,
       maxHealthyPercent: 200,
       minHealthyPercent: 50,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      assignPublicIp: false,
       enableExecuteCommand: true
     });
 
@@ -196,37 +172,5 @@ export class InferenceConstruct extends Construct {
       scaleInCooldown: Duration.seconds(60),
       scaleOutCooldown: Duration.seconds(60)
     });
-
-    // Security group for ALB
-    const albSecurityGroupId = DefaultIdBuilder.build('alb-security-group');
-    const albSecurityGroup = new ec2.SecurityGroup(this, albSecurityGroupId, {
-      vpc: props.vpc,
-      description: 'Security group for ALB',
-      allowAllOutbound: true
-    });
-
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'Allow HTTP traffic'
-    );
-
-    // Security group for ECS tasks
-    const ecsSecurityGroupId = DefaultIdBuilder.build('ecs-security-group');
-    const ecsSecurityGroup = new ec2.SecurityGroup(this, ecsSecurityGroupId, {
-      vpc: props.vpc,
-      description: 'Security group for ECS tasks',
-      allowAllOutbound: true
-    });
-
-    ecsSecurityGroup.addIngressRule(
-      albSecurityGroup,
-      ec2.Port.tcp(8000),
-      'Allow traffic from ALB'
-    );
-
-    // Associate security groups
-    this.alb.addSecurityGroup(albSecurityGroup);
-    this.fastAPIService.connections.addSecurityGroup(ecsSecurityGroup);
   }
 }

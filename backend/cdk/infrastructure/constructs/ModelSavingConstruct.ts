@@ -14,8 +14,6 @@ export interface ModelSavingProps {
   accountId: string;
   region: string;
   trainingRole: iam.Role;
-  vpc: ec2.IVpc;
-  securityGroup: ec2.ISecurityGroup;
 }
 
 export class ModelSavingConstruct extends Construct {
@@ -95,11 +93,6 @@ export class ModelSavingConstruct extends Construct {
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
       memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Lambda function for model promotion
@@ -114,11 +107,6 @@ export class ModelSavingConstruct extends Construct {
       },
       timeout: Duration.minutes(MACRO_CAUSAL_CONSTANTS.LAMBDA.TIMEOUT_MINUTES),
       memorySize: MACRO_CAUSAL_CONSTANTS.LAMBDA.MEMORY_MB,
-      vpc: props.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      },
-      securityGroups: [props.securityGroup]
     });
 
     // Grant permissions to Lambda functions

@@ -2,11 +2,9 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DataLakeConstruct } from '../constructs/DataLakeConstruct';
 import { DataIngestionConstruct } from '../constructs/DataIngestionConstruct';
-import { VPCStack } from './VPCStack';
 import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface DataLakeStackProps extends StackProps {
-  vpcStack: VPCStack;
 }
 
 export class DataLakeStack extends Stack {

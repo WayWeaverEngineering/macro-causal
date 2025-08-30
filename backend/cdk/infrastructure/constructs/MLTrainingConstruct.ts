@@ -14,7 +14,6 @@ export interface MLTrainingProps {
   region: string;
   goldBucket: s3.Bucket;
   artifactsBucket: s3.Bucket;
-  vpc: ec2.IVpc;
 }
 
 export class MLTrainingConstruct extends Construct {
@@ -29,11 +28,9 @@ export class MLTrainingConstruct extends Construct {
     const eksClusterId = DefaultIdBuilder.build('ml-training-cluster');
     this.eksCluster = new eks.Cluster(this, eksClusterId, {
       version: eks.KubernetesVersion.of(MACRO_CAUSAL_CONSTANTS.EKS.KUBERNETES_VERSION),
-      vpc: props.vpc,
       defaultCapacity: 0, // Use Karpenter for auto-scaling
       clusterName: eksClusterId,
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
       role: new iam.Role(this, 'EKSClusterRole', {
         assumedBy: new iam.ServicePrincipal('eks.amazonaws.com'),
         managedPolicies: [
