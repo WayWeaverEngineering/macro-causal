@@ -12,20 +12,20 @@ import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 import { SubnetType } from 'aws-cdk-lib/aws-ec2';
 import { LambdaConfig } from '../configs/LambdaConfig';
 
-export interface ApiDataCollectionProps {
+export interface DataCollectionProps {
   bronzeBucket: s3.Bucket;
   vpc: ec2.IVpc;
   securityGroup: ec2.ISecurityGroup;
 }
 
-export class ApiDataCollectionConstruct extends Construct {
+export class DataCollectionConstruct extends Construct {
   public readonly fredCollector: lambda.Function;
   public readonly worldBankCollector: lambda.Function;
   public readonly yahooFinanceCollector: lambda.Function;
   public readonly dataCollectionStateMachine: sfn.StateMachine;
   public readonly scheduledCollectionRule: events.Rule;
 
-  constructor(scope: Construct, id: string, props: ApiDataCollectionProps) {
+  constructor(scope: Construct, id: string, props: DataCollectionProps) {
     super(scope, id);
 
     // Create Python dependencies Lambda layer

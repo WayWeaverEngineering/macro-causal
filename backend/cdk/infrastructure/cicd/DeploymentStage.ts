@@ -12,7 +12,7 @@ import { VPCStack } from "../stacks/VPCStack";
 import { MLTrainingStack } from "../stacks/MLTrainingStack";
 import { InferenceStack } from "../stacks/InferenceStack";
 import { MonitoringStack } from "../stacks/MonitoringStack";
-import { ApiDataCollectionStack } from "../stacks/ApiDataCollectionStack";
+import { DataCollectionStack } from "../stacks/DataCollectionStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -53,7 +53,7 @@ export class DeploymentStage extends Stage {
     });
 
     // API Data Collection Stack
-    const apiDataCollectionStack = new ApiDataCollectionStack(this, DefaultIdBuilder.build('api-data-collection-stack'), {
+    const dataCollectionStack = new DataCollectionStack(this, DefaultIdBuilder.build('data-collection-stack'), {
       vpcStack: vpcStack,
       bronzeBucket: dataLakeStack.dataLake.bronzeBucket,
       env: {
@@ -97,8 +97,8 @@ export class DeploymentStage extends Stage {
 
     // Add dependencies
     dataLakeStack.addDependency(vpcStack);
-    apiDataCollectionStack.addDependency(dataLakeStack);
-    apiDataCollectionStack.addDependency(vpcStack);
+    dataCollectionStack.addDependency(dataLakeStack);
+    dataCollectionStack.addDependency(vpcStack);
     //mlTrainingStack.addDependency(dataLakeStack);
     //mlTrainingStack.addDependency(vpcStack);
     //inferenceStack.addDependency(mlTrainingStack);
