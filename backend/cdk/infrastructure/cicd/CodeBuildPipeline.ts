@@ -42,7 +42,7 @@ export class CodeBuildPipeline extends CodePipeline {
             ],
             resources: [
               // Must allow CodeBuild to call sts:GetServiceBearerToken on its own identity
-              'arn:aws:sts::715067592333:assumed-role/macro-causal-ci-cd-st-macrocausalcodebuildpi-*'
+              'arn:aws:sts::715067592333:assumed-role/macro-causal-ci-cd-stack-macrocausalcodebuildpipeli*'
             ],
           }),
           new PolicyStatement({
