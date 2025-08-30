@@ -109,6 +109,10 @@ package_layer() {
     zip -r layer_content.zip python > /dev/null 2>&1
     cd "$SCRIPT_DIR"
     
+    # Clean up intermediate artifacts immediately after packaging
+    echo "Cleaning up intermediate artifacts for $layer_name..."
+    rm -rf "$layer_dir/create_layer" "$layer_dir/python" 2>/dev/null || true
+    
     local zip_size=$(du -h "$layer_dir/layer_content.zip" | cut -f1)
     echo "✓ $layer_name packaged successfully (${zip_size})"
 }
