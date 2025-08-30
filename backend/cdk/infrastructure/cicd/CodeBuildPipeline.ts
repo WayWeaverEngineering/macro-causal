@@ -87,7 +87,11 @@ export class CodeBuildPipeline extends CodePipeline {
             "cd ../../../cdk",
             "npm ci",
             "npm run build",
-            "npx cdk synth"
+            "npx cdk synth",
+            "echo Cleaning up Lambda layer artifacts to reduce pipeline output size...",
+            "cd ../lambda/python/layers",
+            "chmod +x ./cleanup_layers.sh",
+            "./cleanup_layers.sh"
           ],
           primaryOutputDirectory: "./backend/cdk/cdk.out"
       })
