@@ -9,6 +9,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
+import { LambdaConfig } from '../configs/LambdaConfig';
 
 export interface DataIngestionProps {
   bronzeBucket: any; // s3.Bucket
@@ -34,10 +35,11 @@ export class DataIngestionConstruct extends Construct {
     };
 
     // Lambda function to start ingestion workflow
-    const ingestionTrigger = new lambda.Function(this, 'IngestionTrigger', {
+    const ingestionTriggerId = DefaultIdBuilder.build('ingestion-trigger');
+    const ingestionTrigger = new lambda.Function(this, ingestionTriggerId, {
       ...lambdaConfig,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'ingestion_trigger')),
       environment: {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         STATE_MACHINE_ARN: '' // Will be set after state machine creation
@@ -50,12 +52,13 @@ export class DataIngestionConstruct extends Construct {
     });
 
     // Lambda function to start EMR job
-    const startEmrJob = new lambda.Function(this, 'StartEmrJob', {
+    const startEmrJobId = DefaultIdBuilder.build('start-emr-job');
+    const startEmrJob = new lambda.Function(this, startEmrJobId, {
       ...lambdaConfig,
       timeout: Duration.minutes(5),
       memorySize: 1024,
       handler: 'start_emr_job.handler',
-      code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'start_emr_job')),
       environment: {
         BRONZE_BUCKET: props.bronzeBucket.bucketName,
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId,
@@ -69,11 +72,12 @@ export class DataIngestionConstruct extends Construct {
     });
 
     // Lambda function to check EMR job status
-    const checkEmrJobStatus = new lambda.Function(this, 'CheckEmrJobStatus', {
+    const checkEmrJobStatusId = DefaultIdBuilder.build('check-emr-job-status');
+    const checkEmrJobStatus = new lambda.Function(this, checkEmrJobStatusId, {
       ...lambdaConfig,
       timeout: Duration.minutes(2),
       handler: 'check_emr_job.handler',
-      code: lambda.Code.fromAsset('../lambda/workflow-triggers'),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('workflow-triggers', 'check_emr_job')),
       environment: {
         EMR_APPLICATION_ID: props.emrApplication.attrApplicationId
       },
