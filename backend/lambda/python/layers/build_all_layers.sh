@@ -44,7 +44,7 @@ package_layer() {
     cd "$layer_dir"
     
     # Create zip file from within the layer root folder, recursively zipping everything
-    zip -r9 ../layer.zip . > /dev/null 2>&1
+    zip -r9 layer.zip . > /dev/null 2>&1
     
     # Return to the original script directory
     cd "$SCRIPT_DIR"
@@ -53,7 +53,7 @@ package_layer() {
     echo "Cleaning up intermediate artifacts for $layer_name..."
     rm -rf "$layer_dir/python" 2>/dev/null || true
     
-    local zip_size=$(du -h "$layer_dir/../layer.zip" | cut -f1)
+    local zip_size=$(du -h "$layer_dir/layer.zip" | cut -f1)
     echo "✓ $layer_name packaged successfully (${zip_size})"
 }
 
@@ -99,7 +99,7 @@ cleanup_layer() {
     local layer_dir="$2"
     
     # Remove build directories and files (quietly)
-    rm -rf "$layer_dir/python" "$layer_dir/../layer.zip" 2>/dev/null || true
+    rm -rf "$layer_dir/python" "$layer_dir/layer.zip" 2>/dev/null || true
 }
 
 # Main execution
