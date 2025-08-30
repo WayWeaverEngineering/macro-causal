@@ -25,12 +25,12 @@ export class DataCollectionStack extends Stack {
     super(scope, id, props);
 
     // Create Python dependencies Lambda layer
-    const pythonDependenciesLayerId = DefaultIdBuilder.build('python-dependencies-layer');
-    const pythonDependenciesLayer = new lambda.LayerVersion(this, pythonDependenciesLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('python-dependencies')),
+    const dataCollectorsPythonLambdaLayerId = DefaultIdBuilder.build('data-collectors-python-lambda-layer');
+    const dataCollectorsPythonLambdaLayer = new lambda.LayerVersion(this, dataCollectorsPythonLambdaLayerId, {
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('data-collectors')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
-      description: 'Python dependencies for API collectors', 
-      layerVersionName: pythonDependenciesLayerId
+      description: 'Python lambda layer for data collectors', 
+      layerVersionName: dataCollectorsPythonLambdaLayerId
     });
 
     const lambdaConfig = {
@@ -48,7 +48,7 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: fredCollectorLambdaFunctionId,
       description: 'Collects economic indicators from FRED API',
-      layers: [pythonDependenciesLayer]
+      layers: [dataCollectorsPythonLambdaLayer]
     });
 
     // World Bank API Data Collector
@@ -59,7 +59,7 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: worldBankCollectorLambdaFunctionId,
       description: 'Collects economic indicators from World Bank API',
-      layers: [pythonDependenciesLayer]
+      layers: [dataCollectorsPythonLambdaLayer]
     });
 
     // Yahoo Finance API Data Collector
@@ -70,7 +70,7 @@ export class DataCollectionStack extends Stack {
       code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: yahooFinanceCollectorLambdaFunctionId,
       description: 'Collects market data from Yahoo Finance API',
-      layers: [pythonDependenciesLayer]
+      layers: [dataCollectorsPythonLambdaLayer]
     });
 
     // Define the state machine workflow
