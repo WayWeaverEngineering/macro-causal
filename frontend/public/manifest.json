@@ -1,0 +1,8 @@
+{
+  "short_name": "Macro AI Analyst",
+  "name": "Macro AI Analyst",
+  "start_url": ".",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

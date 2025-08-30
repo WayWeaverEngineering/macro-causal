@@ -24,8 +24,8 @@ export class DeploymentStage extends Stage {
     super(scope, id, props);
 
     // Create CloudFront Distribution stack to host the website's build artifacts
-    //const cloudFrontStackId = DefaultIdBuilder.build('cloudfront-dist-stack');
-    //new CloudFrontDistributionStack(this, cloudFrontStackId);
+    const cloudFrontStackId = DefaultIdBuilder.build('cloudfront-dist-stack');
+    new CloudFrontDistributionStack(this, cloudFrontStackId);
 
     const lambdaLayersStackId = DefaultIdBuilder.build('lambda-layers-stack')
     const lambdaLayersStack = new PrebuiltLambdaLayersStack(this, lambdaLayersStackId, {
