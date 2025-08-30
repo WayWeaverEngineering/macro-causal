@@ -9,7 +9,6 @@ export class PythonLambdaLayersStack extends Stack {
   public readonly botoLambdaLayer: lambda.LayerVersion;
   public readonly numpyLambdaLayer: lambda.LayerVersion;
   public readonly pandasLambdaLayer: lambda.LayerVersion;
-  public readonly yfinanceLambdaLayer: lambda.LayerVersion;
   public readonly requestsLambdaLayer: lambda.LayerVersion;
   public readonly dateutilsLambdaLayer: lambda.LayerVersion;
 
@@ -54,14 +53,6 @@ export class PythonLambdaLayersStack extends Stack {
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for pandas',
       layerVersionName: pandasLambdaLayerId
-    });
-
-    const yfinanceLambdaLayerId = DefaultIdBuilder.build('yfinance-lambda-layer');
-    this.yfinanceLambdaLayer = new lambda.LayerVersion(this, yfinanceLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('yfinance')),
-      compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
-      description: 'Python lambda layer for yfinance',
-      layerVersionName: yfinanceLambdaLayerId
     });
   }
 }

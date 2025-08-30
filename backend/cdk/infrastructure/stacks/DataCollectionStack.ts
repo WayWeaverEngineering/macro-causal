@@ -78,7 +78,6 @@ export class DataCollectionStack extends Stack {
         props.pythonLambdaLayersStack.pandasLambdaLayer,
         props.pythonLambdaLayersStack.requestsLambdaLayer,
         props.pythonLambdaLayersStack.dateutilsLambdaLayer,
-        props.pythonLambdaLayersStack.yfinanceLambdaLayer
       ]
     });
 
