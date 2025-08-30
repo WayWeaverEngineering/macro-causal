@@ -43,20 +43,20 @@ package_layer() {
     
     echo "Packaging layer: $layer_name..."
     
-    # Create python directory and copy site-packages contents
+    # Create python directory and copy site-packages contents directly
     mkdir -p "$layer_dir/python"
     cp -r "$installation_dir"/* "$layer_dir/python/"
     
-    # Create zip file
-    cd "$layer_dir"
-    zip -r layer_content.zip python > /dev/null 2>&1
+    # Create zip file (zip contents directly, not the python folder)
+    cd "$layer_dir/python"
+    zip -r ../python.zip . > /dev/null 2>&1
     cd "$SCRIPT_DIR"
     
     # Clean up intermediate artifacts immediately after packaging
     echo "Cleaning up intermediate artifacts for $layer_name..."
     rm -rf "$layer_dir/create_layer" "$layer_dir/python" 2>/dev/null || true
     
-    local zip_size=$(du -h "$layer_dir/layer_content.zip" | cut -f1)
+    local zip_size=$(du -h "$layer_dir/python.zip" | cut -f1)
     echo "✓ $layer_name packaged successfully (${zip_size})"
 }
 
@@ -102,7 +102,7 @@ cleanup_layer() {
     local layer_dir="$2"
     
     # Remove build directories and files (quietly)
-    rm -rf "$layer_dir/create_layer" "$layer_dir/python" "$layer_dir/layer_content.zip" 2>/dev/null || true
+    rm -rf "$layer_dir/create_layer" "$layer_dir/python" "$layer_dir/python.zip" 2>/dev/null || true
 }
 
 # Main execution
