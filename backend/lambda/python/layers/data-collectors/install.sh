@@ -7,8 +7,9 @@ echo "Installing Python dependencies..."
 # Create directory structure directly (no virtual environment needed)
 mkdir -p ./create_layer/lib/python3.10/site-packages
 
-# Install dependencies directly to the target directory
-pip install -r requirements.txt --platform=manylinux2014_x86_64 --only-binary=:all: --target ./create_layer/lib/python3.10/site-packages
+# Install dependencies without platform restrictions (more flexible)
+echo "Installing dependencies..."
+pip install -r requirements.txt --target ./create_layer/lib/python3.10/site-packages
 
 echo "Cleaning up unnecessary files to reduce layer size..."
 
@@ -63,4 +64,4 @@ echo "Layer cleanup completed!"
 echo "Final layer size: $(du -sh ./create_layer/lib/python3.10/site-packages | cut -f1)"
 echo "Number of packages: $(ls ./create_layer/lib/python3.10/site-packages | wc -l)"
 echo "Key packages installed:"
-ls ./create_layer/lib/python3.10/site-packages | grep -E "(numpy|pandas|boto3|requests|yfinance|dateutil)"
+ls ./create_layer/lib/python3.10/site-packages | grep -E "(numpy|pandas|boto3|requests|yfinance|dateutil|peewee)"
