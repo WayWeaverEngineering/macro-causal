@@ -16,7 +16,7 @@ install_layer_dependencies() {
     local layer_dir="$2"
     
     # Define installation directory
-    local installation_dir="$layer_dir/create_layer/python"
+    local installation_dir="$layer_dir/create_layer/python/site-packages"
     
     echo "Installing Python dependencies for $layer_name..."
     
@@ -39,13 +39,13 @@ package_layer() {
     local layer_dir="$2"
     
     # Define installation directory (same as in install_layer_dependencies)
-    local installation_dir="$layer_dir/create_layer/python"
+    local installation_dir="$layer_dir/create_layer/python/site-packages"
     
     echo "Packaging layer: $layer_name..."
     
-    # Create python directory and copy site-packages
+    # Create python directory and copy site-packages contents
     mkdir -p "$layer_dir/python"
-    cp -r "$installation_dir" "$layer_dir/python/"
+    cp -r "$installation_dir"/* "$layer_dir/python/"
     
     # Create zip file
     cd "$layer_dir"
