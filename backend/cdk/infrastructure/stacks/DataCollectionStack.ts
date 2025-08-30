@@ -38,13 +38,14 @@ export class DataCollectionStack extends Stack {
       timeout: Duration.minutes(15),
       memorySize: 1024
     };
+    const dataCollectorsFolder = LambdaConfig.getLambdaPythonCodePath('data-collectors');
 
     // FRED API Data Collector
     const fredCollectorLambdaFunctionId = DefaultIdBuilder.build('fred-collector');
     this.fredCollector = new lambda.Function(this, fredCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'fred_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
+      code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: fredCollectorLambdaFunctionId,
       description: 'Collects economic indicators from FRED API',
       layers: [pythonDependenciesLayer]
@@ -55,7 +56,7 @@ export class DataCollectionStack extends Stack {
     this.worldBankCollector = new lambda.Function(this, worldBankCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'worldbank_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
+      code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: worldBankCollectorLambdaFunctionId,
       description: 'Collects economic indicators from World Bank API',
       layers: [pythonDependenciesLayer]
@@ -66,7 +67,7 @@ export class DataCollectionStack extends Stack {
     this.yahooFinanceCollector = new lambda.Function(this, yahooFinanceCollectorLambdaFunctionId, {
       ...lambdaConfig,
       handler: 'yahoo_finance_collector.handler',
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonCodePath('api-collectors')),
+      code: lambda.Code.fromAsset(dataCollectorsFolder),
       functionName: yahooFinanceCollectorLambdaFunctionId,
       description: 'Collects market data from Yahoo Finance API',
       layers: [pythonDependenciesLayer]
