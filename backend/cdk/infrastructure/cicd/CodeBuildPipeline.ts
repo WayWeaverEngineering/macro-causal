@@ -80,7 +80,7 @@ export class CodeBuildPipeline extends CodePipeline {
             "chmod +x ./scripts/npm-authenticate.sh",
             "./scripts/npm-authenticate.sh",
             "echo Building Python Lambda layers...",
-            "cd ../lambda/layers",
+            "cd ../lambda/python/layers",
             "chmod +x ./build-layer.sh",
             "./build-layer.sh",
             //"echo Building Lambda code...",
