@@ -30,7 +30,7 @@ install_layer_dependencies() {
     # Show final layer size and contents
     local layer_size=$(du -sh "$installation_dir" | cut -f1)
     local package_count=$(ls "$installation_dir" | wc -l)
-    echo "✓ $layer_name layer built successfully (${layer_size}, ${package_count} packages)"
+    echo "$layer_name layer built successfully (${layer_size}, ${package_count} packages)"
 }
 
 # Function to build a single layer
@@ -98,7 +98,7 @@ main() {
             # Success message is already printed in the build function
             :
         else
-            echo "✗ Failed to build $layer_name"
+            echo "Failed to build $layer_name"
             failed_layers+=("$layer_name")
         fi
     done
@@ -107,11 +107,11 @@ main() {
     echo "=== Build Summary ==="
     
     if [ ${#failed_layers[@]} -eq 0 ]; then
-            echo "✓ All layers built successfully!"
+            echo "All layers built successfully!"
     echo ""
     echo "All layer python folders created successfully!"
     else
-        echo "✗ Some layers failed to build:"
+        echo "Some layers failed to build:"
         for layer in "${failed_layers[@]}"; do
             echo "  - $layer"
         done
@@ -120,44 +120,5 @@ main() {
         exit 1
     fi
 }
-
-# Function to show usage
-show_usage() {
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Options:"
-echo "  --clean, -c     (Deprecated - python folders are always preserved)"
-echo "  --help, -h      Show this help message"
-echo ""
-echo "Examples:"
-echo "  $0              Build all layers"
-}
-
-# Parse command line arguments
-CLEAN_FIRST=false
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --clean|-c)
-            CLEAN_FIRST=true
-            shift
-            ;;
-        --help|-h)
-            show_usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_usage
-            exit 1
-            ;;
-    esac
-done
-
-# Execute main function
-if [ "$CLEAN_FIRST" = true ]; then
-    echo "Note: --clean option is not needed since python folders are preserved."
-    echo ""
-fi
 
 main
