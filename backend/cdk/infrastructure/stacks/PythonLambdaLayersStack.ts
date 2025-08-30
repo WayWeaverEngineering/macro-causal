@@ -16,9 +16,22 @@ export class PythonLambdaLayersStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
+    const layerBundlingConfig = {
+      bundling: {
+        image: lambda.Runtime.PYTHON_3_10.bundlingImage, // Amazon Linux + Python 3.10
+        command: [
+          'bash', '-c',
+          [
+            'pip install -r requirements.txt -t python', // install into ./python
+            'cp -r . /asset-output'                     // copy into final asset
+          ].join(' && ')
+        ],
+      },
+    }
+
     const botoLambdaLayerId = DefaultIdBuilder.build('boto-lambda-layer');
     this.botoLambdaLayer = new lambda.LayerVersion(this, botoLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('boto')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('boto'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for boto',
       layerVersionName: botoLambdaLayerId
@@ -26,7 +39,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const requestsLambdaLayerId = DefaultIdBuilder.build('requests-lambda-layer');
     this.requestsLambdaLayer = new lambda.LayerVersion(this, requestsLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for requests',
       layerVersionName: requestsLambdaLayerId
@@ -34,7 +47,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const dateutilsLambdaLayerId = DefaultIdBuilder.build('dateutils-lambda-layer');
     this.dateutilsLambdaLayer = new lambda.LayerVersion(this, dateutilsLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for dateutils',
       layerVersionName: dateutilsLambdaLayerId
@@ -42,7 +55,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const numpyLambdaLayerId = DefaultIdBuilder.build('numpy-lambda-layer');
     this.numpyLambdaLayer = new lambda.LayerVersion(this, numpyLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('numpy')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('numpy'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for numpy',
       layerVersionName: numpyLambdaLayerId
@@ -50,7 +63,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const pandasLambdaLayerId = DefaultIdBuilder.build('pandas-lambda-layer');
     this.pandasLambdaLayer = new lambda.LayerVersion(this, pandasLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('pandas')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('pandas'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for pandas',
       layerVersionName: pandasLambdaLayerId
@@ -58,7 +71,7 @@ export class PythonLambdaLayersStack extends Stack {
 
     const yfinanceLambdaLayerId = DefaultIdBuilder.build('yfinance-lambda-layer');
     this.yfinanceLambdaLayer = new lambda.LayerVersion(this, yfinanceLambdaLayerId, {
-      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('yfinance')),
+      code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('yfinance'), layerBundlingConfig),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for yfinance',
       layerVersionName: yfinanceLambdaLayerId
