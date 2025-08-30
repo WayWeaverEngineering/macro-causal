@@ -33,30 +33,6 @@ install_layer_dependencies() {
     echo "✓ $layer_name layer built successfully (${layer_size}, ${package_count} packages)"
 }
 
-# Function to package a layer
-package_layer() {
-    local layer_name="$1"
-    local layer_dir="$2"
-    
-    echo "Packaging layer: $layer_name..."
-    
-    # Change to the layer root directory
-    cd "$layer_dir"
-    
-    # Create zip file from within the layer root folder, recursively zipping everything
-    zip -r9 layer.zip . > /dev/null 2>&1
-    
-    # Return to the original script directory
-    cd "$SCRIPT_DIR"
-    
-    # Clean up intermediate artifacts immediately after packaging
-    echo "Cleaning up intermediate artifacts for $layer_name..."
-    rm -rf "$layer_dir/python" 2>/dev/null || true
-    
-    local zip_size=$(du -h "$layer_dir/layer.zip" | cut -f1)
-    echo "✓ $layer_name packaged successfully (${zip_size})"
-}
-
 # Function to build a single layer
 build_layer() {
     local layer_name="$1"
@@ -82,24 +58,9 @@ build_layer() {
         return 1
     fi
     
-    # Package the layer
-    if ! package_layer "$layer_name" "$layer_dir"; then
-        echo "Error: Failed to package $layer_name"
-        return 1
-    fi
-    
     echo ""
     
     return 0
-}
-
-# Function to clean up build artifacts
-cleanup_layer() {
-    local layer_name="$1"
-    local layer_dir="$2"
-    
-    # Remove build directories and files (quietly)
-    rm -rf "$layer_dir/python" "$layer_dir/layer.zip" 2>/dev/null || true
 }
 
 # Main execution
@@ -146,9 +107,9 @@ main() {
     echo "=== Build Summary ==="
     
     if [ ${#failed_layers[@]} -eq 0 ]; then
-        echo "✓ All layers built successfully!"
-        echo ""
-        echo "All layer packages created successfully!"
+            echo "✓ All layers built successfully!"
+    echo ""
+    echo "All layer python folders created successfully!"
     else
         echo "✗ Some layers failed to build:"
         for layer in "${failed_layers[@]}"; do
@@ -165,12 +126,11 @@ show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  --clean, -c     Clean up build artifacts before building"
-    echo "  --help, -h      Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  $0              Build all layers"
-    echo "  $0 --clean      Clean and build all layers"
+echo "  --clean, -c     (Deprecated - python folders are always preserved)"
+echo "  --help, -h      Show this help message"
+echo ""
+echo "Examples:"
+echo "  $0              Build all layers"
 }
 
 # Parse command line arguments
@@ -196,14 +156,7 @@ done
 
 # Execute main function
 if [ "$CLEAN_FIRST" = true ]; then
-    echo "Cleaning up existing build artifacts..."
-    for dir in */; do
-        if [ -d "$dir" ]; then
-            local layer_name="${dir%/}"
-            cleanup_layer "$layer_name" "$SCRIPT_DIR/$dir"
-        fi
-    done
-    echo "Cleanup completed."
+    echo "Note: --clean option is not needed since python folders are preserved."
     echo ""
 fi
 
