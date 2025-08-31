@@ -3,6 +3,7 @@ import { App } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../utils/Naming';
 import { CICDStack } from '../infrastructure/cicd/CICDStack';
 import {
+  AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME,
   COMMON_UTILS_LAMBDA_LAYER_NAME,
   PrebuiltLambdaLayersStack,
   SsmParamClient
@@ -14,7 +15,8 @@ async function main() {
   // Bootstrap pre-built Lambda layer ARNs from SSM
   const ssmClient = new SsmParamClient({ isCI: true });
   const layerNames = [
-    COMMON_UTILS_LAMBDA_LAYER_NAME
+    COMMON_UTILS_LAMBDA_LAYER_NAME,
+    AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME
   ];
   const prebuiltLambdaLayerArns = await PrebuiltLambdaLayersStack.getArnsfromLayerNames(layerNames, ssmClient);
 
