@@ -50,6 +50,7 @@ export class DataCollectionStage extends Construct {
     const dataCollectionTaskId = DefaultIdBuilder.build(`${dataCollectionStageName}-task`);
     const dataCollectionTask = new tasks.EcsRunTask(this, dataCollectionTaskId, {
       stateName: dataCollectionStageName,
+      comment: "Data collection using Dockerized Python application on ECS Fargate",
       cluster: dataCollectionEcs.service.cluster,
       taskDefinition: dataCollectionEcs.service.taskDefinition,
       integrationPattern: sfn.IntegrationPattern.RUN_JOB,
