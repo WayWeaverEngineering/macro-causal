@@ -117,8 +117,8 @@ class DataCollector:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             
             if start_dt > now:
-                self.logger.warning(f"Start date {start_date} is in the future, adjusting to 30 days ago")
-                start_dt = now - timedelta(days=30)
+                self.logger.warning(f"Start date {start_date} is in the future, adjusting to 50 years ago")
+                start_dt = now - timedelta(days=18250)
                 start_date = start_dt.strftime('%Y-%m-%d')
             
             if end_dt > now:
@@ -139,12 +139,12 @@ class DataCollector:
             # Return default date range
             now = datetime.now(timezone.utc)
             end_date = now.strftime('%Y-%m-%d')
-            start_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+            start_date = (now - timedelta(days=18250)).strftime('%Y-%m-%d')
             self.logger.info(f"Using default date range: {start_date} to {end_date}")
             return start_date, end_date
     
-    def get_default_date_range(self, days_back: int = 30) -> tuple[str, str]:
-        """Get a default date range from today going back specified days"""
+    def get_default_date_range(self, days_back: int = 18250) -> tuple[str, str]:
+        """Get a default date range from today going back specified days (default: 50 years)"""
         now = datetime.now(timezone.utc)
         end_date = now.strftime('%Y-%m-%d')
         start_date = (now - timedelta(days=days_back)).strftime('%Y-%m-%d')
