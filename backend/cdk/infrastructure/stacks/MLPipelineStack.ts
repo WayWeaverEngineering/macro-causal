@@ -67,7 +67,7 @@ export class MLPipelineStack extends Stack {
       }],
       
       // Configure timeout
-      timeout: Duration.hours(2), // 2-hour timeout for data collection
+      taskTimeout: sfn.Timeout.duration(Duration.hours(2)), // 2-hour timeout for data collection
       
       // Result handling
       resultPath: '$.dataCollectionResult'
@@ -97,7 +97,7 @@ export class MLPipelineStack extends Stack {
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');
     this.pipelineStateMachine = new sfn.StateMachine(this, stateMachineId, {
-      definition: workflow,
+      definitionBody: sfn.DefinitionBody.fromChainable(workflow),
       stateMachineName: stateMachineId,
       timeout: Duration.hours(24), // 24-hour timeout for entire pipeline
       comment: 'ML Pipeline for Macro Causal Analysis'
