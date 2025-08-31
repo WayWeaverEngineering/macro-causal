@@ -69,7 +69,13 @@ class YahooFinanceCollector(DataCollector):
         super().__init__(collector_name="YahooFinance")
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         })
     
     def _get_yahoo_crumb(self, symbol: str) -> str:
@@ -78,22 +84,51 @@ class YahooFinanceCollector(DataCollector):
             # First get the quote page to extract crumb
             quote_url = f"https://finance.yahoo.com/quote/{symbol}"
             response = self.session.get(quote_url, timeout=10)
+            
+            # Log detailed error information if the request failed
+            if response.status_code >= 400:
+                logger.error(f"Yahoo Finance crumb extraction request failed for {symbol}")
+                logger.error(f"Status Code: {response.status_code}")
+                logger.error(f"URL: {response.url}")
+                logger.error(f"Request Headers: {dict(self.session.headers)}")
+                try:
+                    error_body = response.text[:1000]  # Limit to first 1000 chars for HTML content
+                    logger.error(f"Response Body (first 1000 chars): {error_body}")
+                except Exception as e:
+                    logger.error(f"Could not read response body: {e}")
+            
             response.raise_for_status()
             
             # Extract crumb from the page
             content = response.text
-            crumb_start = content.find('"CrumbStore":{"crumb":"') + 22
-            crumb_end = content.find('"', crumb_start)
-            crumb = content[crumb_start:crumb_end]
+            
+            # Try multiple patterns for crumb extraction
+            crumb_patterns = [
+                '"CrumbStore":{"crumb":"',
+                '"crumb":"',
+                'CrumbStore":{"crumb":"'
+            ]
+            
+            crumb = ""
+            for pattern in crumb_patterns:
+                if pattern in content:
+                    crumb_start = content.find(pattern) + len(pattern)
+                    crumb_end = content.find('"', crumb_start)
+                    if crumb_end > crumb_start:
+                        crumb = content[crumb_start:crumb_end]
+                        break
+            
+            if not crumb:
+                logger.debug(f"Could not extract crumb for {symbol}, proceeding without authentication")
             
             return crumb
         except Exception as e:
-            logger.warning(f"Could not get crumb for {symbol}: {e}")
+            logger.debug(f"Could not get crumb for {symbol}: {e}, proceeding without authentication")
             return ""
     
     def _get_historical_data_url(self, symbol: str, start_date: int, end_date: int, crumb: str = "") -> str:
         """Construct Yahoo Finance historical data URL"""
-        base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
+        base_url = "https://query2.finance.yahoo.com/v8/finance/chart/"
         
         # URL parameters
         params = {
@@ -116,7 +151,7 @@ class YahooFinanceCollector(DataCollector):
     
     def _get_quote_data_url(self, symbol: str) -> str:
         """Construct Yahoo Finance quote data URL"""
-        base_url = "https://query1.finance.yahoo.com/v7/finance/quote"
+        base_url = "https://query2.finance.yahoo.com/v7/finance/quote"
         params = {
             'symbols': symbol,
             'lang': 'en-US',
@@ -156,6 +191,47 @@ class YahooFinanceCollector(DataCollector):
             url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp, crumb)
             
             response = self.session.get(url, timeout=15)
+            
+            # Log detailed error information if the request failed
+            if response.status_code >= 400:
+                logger.error(f"Yahoo Finance API request failed for {symbol}")
+                logger.error(f"Status Code: {response.status_code}")
+                logger.error(f"URL: {response.url}")
+                logger.error(f"Request Headers: {dict(self.session.headers)}")
+                try:
+                    error_body = response.text
+                    logger.error(f"Response Body: {error_body}")
+                    # Try to parse as JSON for better formatting
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Response JSON: {error_json}")
+                    except:
+                        pass
+                except Exception as e:
+                    logger.error(f"Could not read response body: {e}")
+            
+            # If we get a 401, try without crumb
+            if response.status_code == 401:
+                logger.info(f"Historical data API returned 401 for {symbol}, trying without authentication")
+                url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp, "")
+                response = self.session.get(url, timeout=15)
+                
+                # Log error details for the retry attempt as well
+                if response.status_code >= 400:
+                    logger.error(f"Yahoo Finance API retry request also failed for {symbol}")
+                    logger.error(f"Retry Status Code: {response.status_code}")
+                    logger.error(f"Retry URL: {response.url}")
+                    try:
+                        error_body = response.text
+                        logger.error(f"Retry Response Body: {error_body}")
+                        try:
+                            error_json = response.json()
+                            logger.error(f"Retry Response JSON: {error_json}")
+                        except:
+                            pass
+                    except Exception as e:
+                        logger.error(f"Could not read retry response body: {e}")
+            
             response.raise_for_status()
             
             data = response.json()
@@ -220,15 +296,43 @@ class YahooFinanceCollector(DataCollector):
             
         except Exception as e:
             logger.error(f"Error fetching Yahoo Finance data for symbol {symbol}: {e}")
-            logger.debug(f"Yahoo Finance error details for {symbol}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
         """Get additional information about a symbol using direct API calls"""
         try:
+            # Try the quote API first
             url = self._get_quote_data_url(symbol)
             
             response = self.session.get(url, timeout=10)
+            
+            # Log detailed error information if the request failed
+            if response.status_code >= 400:
+                logger.error(f"Yahoo Finance Quote API request failed for {symbol}")
+                logger.error(f"Status Code: {response.status_code}")
+                logger.error(f"URL: {response.url}")
+                logger.error(f"Request Headers: {dict(self.session.headers)}")
+                try:
+                    error_body = response.text
+                    logger.error(f"Response Body: {error_body}")
+                    # Try to parse as JSON for better formatting
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Response JSON: {error_json}")
+                    except:
+                        pass
+                except Exception as e:
+                    logger.error(f"Could not read response body: {e}")
+            
+            # If we get a 401, try alternative approach
+            if response.status_code == 401:
+                logger.info(f"Quote API returned 401 for {symbol}, trying alternative method")
+                return self._get_symbol_info_alternative(symbol)
+            
             response.raise_for_status()
             
             data = response.json()
@@ -254,6 +358,72 @@ class YahooFinanceCollector(DataCollector):
             
         except Exception as e:
             logger.warning(f"Could not fetch info for Yahoo Finance symbol {symbol}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return self._get_default_symbol_info(symbol)
+    
+    def _get_symbol_info_alternative(self, symbol: str) -> Dict[str, Any]:
+        """Alternative method to get symbol info when quote API fails"""
+        try:
+            # Try to get basic info from the chart API response
+            # This is more reliable as it's the same endpoint we use for price data
+            start_date, end_date = self.get_default_date_range(1)  # Just get today's data
+            start_timestamp = self._date_to_timestamp(start_date)
+            end_timestamp = self._date_to_timestamp(end_date)
+            
+            url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp)
+            
+            response = self.session.get(url, timeout=10)
+            
+            # Log detailed error information if the request failed
+            if response.status_code >= 400:
+                logger.error(f"Yahoo Finance Alternative API request failed for {symbol}")
+                logger.error(f"Status Code: {response.status_code}")
+                logger.error(f"URL: {response.url}")
+                logger.error(f"Request Headers: {dict(self.session.headers)}")
+                try:
+                    error_body = response.text
+                    logger.error(f"Response Body: {error_body}")
+                    # Try to parse as JSON for better formatting
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Response JSON: {error_json}")
+                    except:
+                        pass
+                except Exception as e:
+                    logger.error(f"Could not read response body: {e}")
+            
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
+                return self._get_default_symbol_info(symbol)
+            
+            result = data['chart']['result'][0]
+            meta = result.get('meta', {})
+            
+            return {
+                'symbol': symbol,
+                'name': meta.get('symbol', symbol),
+                'sector': '',
+                'industry': '',
+                'market_cap': 0,
+                'currency': meta.get('currency', ''),
+                'exchange': meta.get('exchangeName', ''),
+                'country': '',
+                'website': '',
+                'description': ''
+            }
+            
+        except Exception as e:
+            logger.debug(f"Alternative symbol info method also failed for {symbol}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return self._get_default_symbol_info(symbol)
     
     def _get_default_symbol_info(self, symbol: str) -> Dict[str, Any]:

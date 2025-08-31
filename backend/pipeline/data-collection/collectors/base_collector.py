@@ -201,9 +201,23 @@ class DataCollector:
             logger.error(f"HTTP error for {url}: {e}")
             if hasattr(e.response, 'text'):
                 logger.error(f"Error response: {e.response.text}")
+                # Try to parse as JSON for better formatting
+                try:
+                    error_json = e.response.json()
+                    logger.error(f"Error response JSON: {error_json}")
+                except:
+                    pass
+            if hasattr(e.response, 'status_code'):
+                logger.error(f"HTTP Status Code: {e.response.status_code}")
+            if hasattr(e.response, 'headers'):
+                logger.error(f"Response Headers: {dict(e.response.headers)}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error making request to {url}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     @retry_on_failure(max_retries=3, delay=1.0)

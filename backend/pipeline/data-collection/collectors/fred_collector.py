@@ -44,6 +44,28 @@ class FREDCollector(DataCollector):
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             
+            # Additional validation to ensure dates are not in the future
+            now = datetime.now(timezone.utc)
+            today = now.strftime('%Y-%m-%d')
+            
+            # Parse dates to check if they're in the future
+            try:
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                current_dt = datetime.strptime(today, '%Y-%m-%d')
+                
+                if start_dt > current_dt:
+                    logger.warning(f"Start date {start_date} is still in the future after validation, using 30 days ago")
+                    start_date = (current_dt - timedelta(days=30)).strftime('%Y-%m-%d')
+                
+                if end_dt > current_dt:
+                    logger.warning(f"End date {end_date} is still in the future after validation, using today")
+                    end_date = today
+                    
+            except ValueError as e:
+                logger.warning(f"Date parsing error: {e}, using default date range")
+                start_date, end_date = self.get_default_date_range(30)
+            
             params = {
                 'series_id': series_id,
                 'file_type': 'json',
@@ -63,11 +85,59 @@ class FREDCollector(DataCollector):
             # Use the enhanced HTTP request method from base collector
             response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
             
+            # Log detailed error information if the request failed
+            if response.status_code >= 400:
+                logger.error(f"FRED API request failed for {series_id}")
+                logger.error(f"Status Code: {response.status_code}")
+                logger.error(f"URL: {response.url}")
+                logger.error(f"Request Parameters: {params}")
+                try:
+                    error_body = response.text
+                    logger.error(f"Response Body: {error_body}")
+                    # Try to parse as JSON for better formatting
+                    try:
+                        error_json = response.json()
+                        logger.error(f"Response JSON: {error_json}")
+                    except:
+                        pass
+                except Exception as e:
+                    logger.error(f"Could not read response body: {e}")
+            
+            # If we get a 400 error, it might be due to invalid dates, try with a more conservative date range
+            if response.status_code == 400:
+                logger.warning(f"FRED API returned 400 for {series_id}, trying with conservative date range")
+                # Try with last 7 days instead
+                conservative_start, conservative_end = self.get_default_date_range(7)
+                params['observation_start'] = conservative_start
+                params['observation_end'] = conservative_end
+                logger.info(f"Retrying FRED data for series: {series_id} from {conservative_start} to {conservative_end}")
+                response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
+                
+                # Log error details for the retry attempt as well
+                if response.status_code >= 400:
+                    logger.error(f"FRED API retry request also failed for {series_id}")
+                    logger.error(f"Retry Status Code: {response.status_code}")
+                    logger.error(f"Retry URL: {response.url}")
+                    logger.error(f"Retry Parameters: {params}")
+                    try:
+                        error_body = response.text
+                        logger.error(f"Retry Response Body: {error_body}")
+                        try:
+                            error_json = response.json()
+                            logger.error(f"Retry Response JSON: {error_json}")
+                        except:
+                            pass
+                    except Exception as e:
+                        logger.error(f"Could not read retry response body: {e}")
+            
             return response.json()
             
         except Exception as e:
             logger.error(f"Error fetching FRED data for series {series_id}: {e}")
-            logger.debug(f"FRED API error details for {series_id}: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     def process_fred_data(self, raw_data: Dict[str, Any], series_id: str) -> pd.DataFrame:
@@ -109,7 +179,13 @@ class FREDCollector(DataCollector):
             
         except Exception as e:
             logger.error(f"Error processing FRED data for series {series_id}: {e}")
-            logger.debug(f"FRED data processing error details: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Exception details: {str(e)}")
+            logger.error(f"Raw data structure: {type(raw_data)}")
+            if isinstance(raw_data, dict):
+                logger.error(f"Raw data keys: {list(raw_data.keys())}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
     
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
@@ -180,6 +256,10 @@ class FREDCollector(DataCollector):
                     
                 except Exception as e:
                     logger.error(f"Failed to process FRED series {series_id}: {e}")
+                    logger.error(f"Exception type: {type(e).__name__}")
+                    logger.error(f"Exception details: {str(e)}")
+                    import traceback
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
                     self.add_failed_result(
                         item_id=series_id,
                         error=str(e)
