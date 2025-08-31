@@ -80,28 +80,9 @@ class FREDCollector(DataCollector):
             params['observation_end'] = end_date
                 
             logger.info(f"Fetching FRED data for series: {series_id} from {start_date} to {end_date}")
-            logger.debug(f"FRED API parameters: {params}")
             
             # Use the enhanced HTTP request method from base collector
             response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
-            
-            # Log detailed error information if the request failed
-            if response.status_code >= 400:
-                logger.error(f"FRED API request failed for {series_id}")
-                logger.error(f"Status Code: {response.status_code}")
-                logger.error(f"URL: {response.url}")
-                logger.error(f"Request Parameters: {params}")
-                try:
-                    error_body = response.text
-                    logger.error(f"Response Body: {error_body}")
-                    # Try to parse as JSON for better formatting
-                    try:
-                        error_json = response.json()
-                        logger.error(f"Response JSON: {error_json}")
-                    except:
-                        pass
-                except Exception as e:
-                    logger.error(f"Could not read response body: {e}")
             
             # If we get a 400 error, it might be due to invalid dates, try with a more conservative date range
             if response.status_code == 400:
@@ -112,32 +93,12 @@ class FREDCollector(DataCollector):
                 params['observation_end'] = conservative_end
                 logger.info(f"Retrying FRED data for series: {series_id} from {conservative_start} to {conservative_end}")
                 response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
-                
-                # Log error details for the retry attempt as well
-                if response.status_code >= 400:
-                    logger.error(f"FRED API retry request also failed for {series_id}")
-                    logger.error(f"Retry Status Code: {response.status_code}")
-                    logger.error(f"Retry URL: {response.url}")
-                    logger.error(f"Retry Parameters: {params}")
-                    try:
-                        error_body = response.text
-                        logger.error(f"Retry Response Body: {error_body}")
-                        try:
-                            error_json = response.json()
-                            logger.error(f"Retry Response JSON: {error_json}")
-                        except:
-                            pass
-                    except Exception as e:
-                        logger.error(f"Could not read retry response body: {e}")
             
             return response.json()
             
         except Exception as e:
-            logger.error(f"Error fetching FRED data for series {series_id}: {e}")
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception details: {str(e)}")
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            self.log_consolidated_error(f"FRED data fetch for {series_id}", e, 
+                                      additional_info={"start_date": start_date, "end_date": end_date})
             raise
     
     def process_fred_data(self, raw_data: Dict[str, Any], series_id: str) -> pd.DataFrame:
@@ -148,8 +109,6 @@ class FREDCollector(DataCollector):
             if not observations:
                 logger.warning(f"No observations found for FRED series {series_id}")
                 return pd.DataFrame()
-            
-            logger.debug(f"Processing {len(observations)} observations for FRED series {series_id}")
             
             # Extract data points
             data_points = []
@@ -174,18 +133,12 @@ class FREDCollector(DataCollector):
             df['source'] = 'FRED'
             df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
-            logger.debug(f"Processed {len(df)} records for FRED series {series_id}")
+            logger.info(f"Processed {len(df)} records for FRED series {series_id}")
             return df
             
         except Exception as e:
-            logger.error(f"Error processing FRED data for series {series_id}: {e}")
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception details: {str(e)}")
-            logger.error(f"Raw data structure: {type(raw_data)}")
-            if isinstance(raw_data, dict):
-                logger.error(f"Raw data keys: {list(raw_data.keys())}")
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            self.log_consolidated_error(f"FRED data processing for {series_id}", e,
+                                      additional_info={"raw_data_type": type(raw_data).__name__})
             raise
     
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
@@ -199,7 +152,7 @@ class FREDCollector(DataCollector):
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
             # Get API key (required)
-            api_key = self.get_api_key('API_KEY')
+            api_key = self.get_api_key('FRED_API_KEY')
             if not api_key:
                 error_msg = "FRED API key not found. API key is required for data collection."
                 logger.error(error_msg)
@@ -255,11 +208,7 @@ class FREDCollector(DataCollector):
                     time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests
                     
                 except Exception as e:
-                    logger.error(f"Failed to process FRED series {series_id}: {e}")
-                    logger.error(f"Exception type: {type(e).__name__}")
-                    logger.error(f"Exception details: {str(e)}")
-                    import traceback
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    self.log_consolidated_error(f"FRED series processing {series_id}", e)
                     self.add_failed_result(
                         item_id=series_id,
                         error=str(e)
@@ -271,8 +220,7 @@ class FREDCollector(DataCollector):
             return self.results
             
         except Exception as e:
-            logger.error(f"FRED data collection failed: {e}")
-            logger.debug(f"FRED collection error details: {e}")
+            self.log_consolidated_error("FRED data collection", e)
             self.add_failed_result(
                 item_id="collection",
                 error=f"Collection failed: {str(e)}"

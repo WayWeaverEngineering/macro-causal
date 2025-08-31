@@ -54,18 +54,15 @@ def log_api_call(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         func_name = func.__name__
-        logger.debug(f"API Call: {func_name} - Args: {args}, Kwargs: {kwargs}")
         
         start_time = time.time()
         try:
             result = func(*args, **kwargs)
             duration = time.time() - start_time
-            logger.debug(f"API Call Success: {func_name} - Duration: {duration:.2f}s")
             return result
         except Exception as e:
             duration = time.time() - start_time
             logger.error(f"API Call Failed: {func_name} - Duration: {duration:.2f}s - Error: {e}")
-            logger.debug(f"API Call Error Details: {traceback.format_exc()}")
             raise
     return wrapper
 
@@ -86,6 +83,23 @@ class DataCollector:
             'total_failed': 0
         }
         logger.info(f"Initialized {collector_name} collector")
+    
+    def log_consolidated_error(self, context: str, error: Exception, response: Optional[requests.Response] = None, 
+                              additional_info: Dict[str, Any] = None) -> None:
+        """Consolidate error logging into a single line with key information"""
+        error_parts = [f"{self.collector_name} {context} failed: {type(error).__name__}: {str(error)}"]
+        
+        if response:
+            error_parts.append(f"HTTP {response.status_code}")
+            if hasattr(response, 'url'):
+                error_parts.append(f"URL: {response.url}")
+        
+        if additional_info:
+            for key, value in additional_info.items():
+                if value is not None:
+                    error_parts.append(f"{key}: {value}")
+        
+        logger.error(" | ".join(error_parts))
     
     def validate_date_range(self, start_date: str, end_date: str) -> tuple[str, str]:
         """Validate and fix date ranges to ensure they're valid"""
@@ -139,7 +153,6 @@ class DataCollector:
             return None
             
         try:
-            logger.debug(f"Retrieving API key '{key_name}' from Secrets Manager")
             response = secrets_client.get_secret_value(SecretId=API_SECRETS_ARN)
             secrets = json.loads(response['SecretString'])
             api_key = secrets.get(key_name, '')
@@ -148,15 +161,13 @@ class DataCollector:
                 logger.info(f"Successfully retrieved API key '{key_name}' from Secrets Manager")
                 # Log partial key for debugging (first 4 chars)
                 masked_key = api_key[:4] + '*' * (len(api_key) - 8) + api_key[-4:] if len(api_key) > 8 else '****'
-                logger.debug(f"API key '{key_name}' (masked): {masked_key}")
             else:
                 logger.warning(f"API key '{key_name}' not found in Secrets Manager secret")
                 
             return api_key
             
         except Exception as e:
-            logger.error(f"Error retrieving API key '{key_name}' from Secrets Manager: {e}")
-            logger.debug(f"Secrets Manager error details: {traceback.format_exc()}")
+            self.log_consolidated_error(f"API key retrieval '{key_name}'", e)
             return None
     
     @log_api_call
@@ -165,12 +176,6 @@ class DataCollector:
                          headers: Dict = None, timeout: int = 30, **kwargs) -> requests.Response:
         """Make HTTP requests with comprehensive error handling and logging"""
         try:
-            logger.debug(f"Making {method} request to {url}")
-            if params:
-                logger.debug(f"Request parameters: {params}")
-            if headers:
-                logger.debug(f"Request headers: {headers}")
-            
             response = requests.request(
                 method=method,
                 url=url,
@@ -180,119 +185,105 @@ class DataCollector:
                 **kwargs
             )
             
-            logger.debug(f"Response status: {response.status_code}")
-            logger.debug(f"Response headers: {dict(response.headers)}")
-            
-            # Log response content for debugging (first 500 chars)
-            if response.content:
-                content_preview = response.text[:500]
-                logger.debug(f"Response content preview: {content_preview}")
-            
             response.raise_for_status()
             return response
             
         except requests.exceptions.Timeout:
-            logger.error(f"Request timeout for {url} after {timeout}s")
+            self.log_consolidated_error("HTTP request timeout", Exception(f"Timeout after {timeout}s"), 
+                                      additional_info={"url": url})
             raise
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error for {url}: {e}")
+            self.log_consolidated_error("HTTP connection", e, additional_info={"url": url})
             raise
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error for {url}: {e}")
-            if hasattr(e.response, 'text'):
-                logger.error(f"Error response: {e.response.text}")
-                # Try to parse as JSON for better formatting
-                try:
-                    error_json = e.response.json()
-                    logger.error(f"Error response JSON: {error_json}")
-                except:
-                    pass
+            additional_info = {"url": url}
             if hasattr(e.response, 'status_code'):
-                logger.error(f"HTTP Status Code: {e.response.status_code}")
-            if hasattr(e.response, 'headers'):
-                logger.error(f"Response Headers: {dict(e.response.headers)}")
+                additional_info["status_code"] = e.response.status_code
+            if hasattr(e.response, 'text') and e.response.text:
+                additional_info["response_preview"] = e.response.text[:200]
+            
+            self.log_consolidated_error("HTTP request", e, e.response, additional_info)
             raise
         except Exception as e:
-            logger.error(f"Unexpected error making request to {url}: {e}")
-            logger.error(f"Exception type: {type(e).__name__}")
-            logger.error(f"Exception details: {str(e)}")
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
+            self.log_consolidated_error("HTTP request", e, additional_info={"url": url})
             raise
     
     @retry_on_failure(max_retries=3, delay=1.0)
-    def save_to_s3(self, df: pd.DataFrame, s3_path: str, bucket: str) -> str:
-        """Save DataFrame to S3 as parquet with retry logic"""
+    def save_to_s3(self, df: pd.DataFrame, s3_path: str, bucket: str = None) -> str:
+        """Save DataFrame to S3 with retry logic"""
+        if not bucket:
+            bucket = BRONZE_BUCKET
+            
         try:
-            if df.empty:
-                logger.warning(f"No data to save to {s3_path}")
-                return ""
-            
-            logger.debug(f"Saving {len(df)} records to s3://{bucket}/{s3_path}")
-            
-            # Convert DataFrame to parquet bytes
-            parquet_buffer = io.BytesIO()
-            df.to_parquet(parquet_buffer, index=False)
-            parquet_buffer.seek(0)
+            # Convert DataFrame to Parquet format in memory
+            buffer = io.BytesIO()
+            df.to_parquet(buffer, index=False)
+            buffer.seek(0)
             
             # Upload to S3
             s3_client.put_object(
                 Bucket=bucket,
                 Key=s3_path,
-                Body=parquet_buffer.getvalue(),
-                ContentType='application/octet-stream'
+                Body=buffer.getvalue()
             )
             
-            logger.info(f"Successfully saved {len(df)} records to s3://{bucket}/{s3_path}")
+            logger.info(f"Saved {len(df)} records to s3://{bucket}/{s3_path}")
             return s3_path
             
         except Exception as e:
-            logger.error(f"Error saving data to {s3_path}: {e}")
-            logger.debug(f"S3 save error details: {traceback.format_exc()}")
+            self.log_consolidated_error("S3 save", e, additional_info={"bucket": bucket, "path": s3_path, "records": len(df)})
             raise
     
-    def log_collection_start(self, **kwargs):
-        """Log the start of data collection with parameters"""
-        self.results['start_time'] = datetime.now(timezone.utc).isoformat()
-        logger.info(f"Starting {self.collector_name} data collection")
-        logger.info(f"Collection parameters: {kwargs}")
-    
-    def log_collection_end(self):
-        """Log the end of data collection with summary"""
-        self.results['end_time'] = datetime.now(timezone.utc).isoformat()
-        self.results['total_success'] = len(self.results['success'])
-        self.results['total_failed'] = len(self.results['failed'])
+    def add_success_result(self, item_id: str, records_count: int, s3_key: str, **kwargs) -> None:
+        """Add a successful result to the collection results"""
+        result = {
+            'item_id': item_id,
+            'status': 'success',
+            'records_count': records_count,
+            's3_key': s3_key,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        result.update(kwargs)
         
-        logger.info(f"Completed {self.collector_name} data collection")
-        logger.info(f"Summary: {self.results['total_success']} successful, {self.results['total_failed']} failed")
-        
-        if self.results['failed']:
-            logger.warning(f"Failed items: {self.results['failed']}")
-    
-    def add_success_result(self, item_id: str, **kwargs):
-        """Add a successful result with standardized logging"""
-        result = {'item_id': item_id, **kwargs}
         self.results['success'].append(result)
-        logger.info(f"Successfully processed {item_id}")
-        logger.debug(f"Success details for {item_id}: {kwargs}")
+        self.results['total_success'] += 1
+        self.results['total_processed'] += 1
+        
+        logger.info(f"Successfully processed {item_id}: {records_count} records")
     
-    def add_failed_result(self, item_id: str, error: str, **kwargs):
-        """Add a failed result with standardized logging"""
-        result = {'item_id': item_id, 'error': error, **kwargs}
+    def add_failed_result(self, item_id: str, error: str, **kwargs) -> None:
+        """Add a failed result to the collection results"""
+        result = {
+            'item_id': item_id,
+            'status': 'failed',
+            'error': error,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        result.update(kwargs)
+        
         self.results['failed'].append(result)
+        self.results['total_failed'] += 1
+        self.results['total_processed'] += 1
+        
         logger.error(f"Failed to process {item_id}: {error}")
-        logger.debug(f"Failure details for {item_id}: {kwargs}")
     
     def validate_environment(self) -> bool:
         """Validate that required environment variables are set"""
-        missing_vars = []
-        
-        if not BRONZE_BUCKET:
-            missing_vars.append('BRONZE_BUCKET')
+        required_vars = ['BRONZE_BUCKET']
+        missing_vars = [var for var in required_vars if not os.environ.get(var)]
         
         if missing_vars:
             logger.error(f"Missing required environment variables: {missing_vars}")
             return False
         
-        logger.info("Environment validation passed")
         return True
+    
+    def log_collection_start(self, **kwargs) -> None:
+        """Log the start of data collection"""
+        self.results['start_time'] = datetime.now(timezone.utc).isoformat()
+        logger.info(f"Starting {self.collector_name} data collection")
+    
+    def log_collection_end(self) -> None:
+        """Log the end of data collection"""
+        self.results['end_time'] = datetime.now(timezone.utc).isoformat()
+        logger.info(f"Completed {self.collector_name} data collection: {self.results['total_success']} successful, {self.results['total_failed']} failed")
