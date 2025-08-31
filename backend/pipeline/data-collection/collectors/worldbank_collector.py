@@ -4,7 +4,6 @@ World Bank Data Collector
 Collects economic indicators from World Bank API
 """
 
-import requests
 import pandas as pd
 from datetime import datetime, timezone
 import logging
@@ -34,10 +33,13 @@ WORLDBANK_INDICATORS = [
 COUNTRIES = ['US', 'CN', 'JP', 'DE', 'GB', 'FR', 'IN', 'IT', 'CA', 'BR']
 
 class WorldBankCollector(DataCollector):
-    """World Bank data collector"""
+    """World Bank data collector with enhanced error handling"""
+    
+    def __init__(self):
+        super().__init__(collector_name="WorldBank")
     
     def fetch_worldbank_data(self, country_code: str, indicator: str, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
-        """Fetch data for a specific World Bank indicator and country"""
+        """Fetch data for a specific World Bank indicator and country with enhanced error handling"""
         try:
             url = f"{WORLDBANK_BASE_URL}/{country_code}/indicator/{indicator}"
             
@@ -46,20 +48,33 @@ class WorldBankCollector(DataCollector):
                 'per_page': 1000  # Maximum records per request
             }
             
-            if start_date:
-                params['date'] = f"{start_date}:{end_date or datetime.now(timezone.utc).year}"
+            # Handle date range for World Bank API (uses years)
+            if start_date and end_date:
+                try:
+                    start_year = int(start_date)
+                    end_year = int(end_date)
+                    params['date'] = f"{start_year}:{end_year}"
+                except ValueError:
+                    # If dates are not years, use current year
+                    current_year = datetime.now(timezone.utc).year
+                    params['date'] = f"{current_year-10}:{current_year}"
+            else:
+                # Default to last 10 years
+                current_year = datetime.now(timezone.utc).year
+                params['date'] = f"{current_year-10}:{current_year}"
             
             logger.info(f"Fetching World Bank data for country: {country_code}, indicator: {indicator}")
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
+            logger.debug(f"World Bank API URL: {url}")
+            logger.debug(f"World Bank API parameters: {params}")
+            
+            # Use the enhanced HTTP request method from base collector
+            response = self.make_http_request(url, params=params, timeout=30)
             
             return response.json()
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching World Bank data for country {country_code}, indicator {indicator}: {e}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error for World Bank country {country_code}, indicator {indicator}: {e}")
+            logger.error(f"Error fetching World Bank data for country {country_code}, indicator {indicator}: {e}")
+            logger.debug(f"World Bank API error details for {country_code}/{indicator}: {e}")
             raise
     
     def process_worldbank_data(self, raw_data: List[Dict[str, Any]], country_code: str, 
@@ -76,6 +91,8 @@ class WorldBankCollector(DataCollector):
             if not data_points:
                 logger.warning(f"No data points found for World Bank country {country_code}, indicator {indicator}")
                 return pd.DataFrame()
+            
+            logger.debug(f"Processing {len(data_points)} data points for World Bank {country_code}/{indicator}")
             
             # Extract data points
             processed_data = []
@@ -107,74 +124,99 @@ class WorldBankCollector(DataCollector):
             df['source'] = 'WorldBank'
             df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
+            logger.debug(f"Processed {len(df)} records for World Bank {country_code}/{indicator}")
             return df
             
         except Exception as e:
             logger.error(f"Error processing World Bank data for country {country_code}, indicator {indicator}: {e}")
+            logger.debug(f"World Bank data processing error details: {e}")
             raise
     
     def collect(self, start_date: int = None, end_date: int = None) -> Dict[str, Any]:
-        """Collect World Bank data"""
-        logger.info("Starting World Bank data collection")
-        
-        # Determine date range (last 10 years by default)
-        if not end_date:
-            end_date = datetime.now(timezone.utc).year
-        if not start_date:
-            start_date = end_date - 10
-        
-        self.results['start_date'] = start_date
-        self.results['end_date'] = end_date
-        self.results['total_combinations'] = len(COUNTRIES) * len(WORLDBANK_INDICATORS)
-        
-        # Process each country and indicator combination
-        for country_code in COUNTRIES:
-            for indicator_info in WORLDBANK_INDICATORS:
-                indicator = indicator_info['indicator']
-                indicator_name = indicator_info['name']
-                
-                try:
-                    logger.info(f"Processing World Bank country: {country_code}, indicator: {indicator}")
+        """Collect World Bank data with comprehensive error handling"""
+        try:
+            # Validate environment
+            if not self.validate_environment():
+                raise ValueError("Environment validation failed")
+            
+            # Log collection start
+            self.log_collection_start(start_date=start_date, end_date=end_date)
+            
+            # Determine date range (last 10 years by default)
+            if not end_date:
+                end_date = datetime.now(timezone.utc).year
+            if not start_date:
+                start_date = end_date - 10
+            
+            self.results['start_date'] = start_date
+            self.results['end_date'] = end_date
+            self.results['total_combinations'] = len(COUNTRIES) * len(WORLDBANK_INDICATORS)
+            
+            logger.info(f"Processing {len(COUNTRIES)} countries and {len(WORLDBANK_INDICATORS)} indicators from {start_date} to {end_date}")
+            
+            # Process each country and indicator combination
+            for country_code in COUNTRIES:
+                for indicator_info in WORLDBANK_INDICATORS:
+                    indicator = indicator_info['indicator']
+                    indicator_name = indicator_info['name']
                     
-                    # Fetch data from World Bank API
-                    raw_data = self.fetch_worldbank_data(country_code, indicator, str(start_date), str(end_date))
-                    
-                    # Process the data
-                    df = self.process_worldbank_data(raw_data, country_code, indicator, indicator_name)
-                    
-                    if not df.empty:
-                        # Create S3 path
-                        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-                        s3_path = f"raw/worldbank/{country_code}/{indicator}/{timestamp}_{country_code}_{indicator}.parquet"
+                    try:
+                        logger.info(f"Processing World Bank country: {country_code}, indicator: {indicator}")
                         
-                        # Save to S3
-                        s3_key = self.save_to_s3(df, s3_path, BRONZE_BUCKET)
+                        # Fetch data from World Bank API
+                        raw_data = self.fetch_worldbank_data(country_code, indicator, str(start_date), str(end_date))
                         
-                        self.results['success'].append({
-                            'country_code': country_code,
-                            'indicator_code': indicator,
-                            'indicator_name': indicator_name,
-                            'records_count': len(df),
-                            's3_key': s3_key,
-                            'date_range': f"{df['date'].min().year} to {df['date'].max().year}"
-                        })
-                    else:
-                        self.results['failed'].append({
-                            'country_code': country_code,
-                            'indicator_code': indicator,
-                            'error': 'No data returned'
-                        })
-                    
-                    # Rate limiting - World Bank allows 100 requests per minute
-                    time.sleep(0.6)
-                    
-                except Exception as e:
-                    logger.error(f"Failed to process World Bank country {country_code}, indicator {indicator}: {e}")
-                    self.results['failed'].append({
-                        'country_code': country_code,
-                        'indicator_code': indicator,
-                        'error': str(e)
-                    })
-        
-        logger.info(f"World Bank data collection completed. Success: {len(self.results['success'])}, Failed: {len(self.results['failed'])}")
-        return self.results
+                        # Process the data
+                        df = self.process_worldbank_data(raw_data, country_code, indicator, indicator_name)
+                        
+                        if not df.empty:
+                            # Create S3 path
+                            timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+                            s3_path = f"raw/worldbank/{country_code}/{indicator}/{timestamp}_{country_code}_{indicator}.parquet"
+                            
+                            # Save to S3
+                            s3_key = self.save_to_s3(df, s3_path, BRONZE_BUCKET)
+                            
+                            # Add success result
+                            self.add_success_result(
+                                item_id=f"{country_code}_{indicator}",
+                                country_code=country_code,
+                                indicator_code=indicator,
+                                indicator_name=indicator_name,
+                                records_count=len(df),
+                                s3_key=s3_key,
+                                date_range=f"{df['date'].min().year} to {df['date'].max().year}"
+                            )
+                        else:
+                            self.add_failed_result(
+                                item_id=f"{country_code}_{indicator}",
+                                error='No data returned from World Bank API',
+                                country_code=country_code,
+                                indicator_code=indicator
+                            )
+                        
+                        # Rate limiting - World Bank allows 100 requests per minute
+                        time.sleep(0.6)
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to process World Bank country {country_code}, indicator {indicator}: {e}")
+                        self.add_failed_result(
+                            item_id=f"{country_code}_{indicator}",
+                            error=str(e),
+                            country_code=country_code,
+                            indicator_code=indicator
+                        )
+            
+            # Log collection end
+            self.log_collection_end()
+            
+            return self.results
+            
+        except Exception as e:
+            logger.error(f"World Bank data collection failed: {e}")
+            logger.debug(f"World Bank collection error details: {e}")
+            self.add_failed_result(
+                item_id="collection",
+                error=f"Collection failed: {str(e)}"
+            )
+            return self.results
