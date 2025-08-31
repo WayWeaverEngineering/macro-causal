@@ -85,7 +85,12 @@ export class CodeBuildPipeline extends CodePipeline {
             "echo Obtaining npm credentials...",
             "chmod +x ./scripts/npm-authenticate.sh",
             "./scripts/npm-authenticate.sh",
+            "echo Building Lambda code...",
+            "cd ../lambda",
+            "npm ci",
+            "npm run build",
             "echo Synthesizing CDK stack...",
+            "cd ../cdk",
             "npm ci",
             "npm run build",
             "npx cdk synth"
