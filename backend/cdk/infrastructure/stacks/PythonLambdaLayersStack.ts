@@ -1,4 +1,4 @@
-import { Stack, StackProps } from "aws-cdk-lib";
+import { Stack, StackProps, RemovalPolicy } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { LambdaConfig } from "../configs/LambdaConfig";
@@ -20,7 +20,8 @@ export class PythonLambdaLayersStack extends Stack {
       code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('boto-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for boto',
-      layerVersionName: botoLambdaLayerId
+      layerVersionName: botoLambdaLayerId,
+      removalPolicy: RemovalPolicy.RETAIN
     });
 
     const requestsLambdaLayerId = DefaultIdBuilder.build('requests-lambda-layer');
@@ -28,7 +29,8 @@ export class PythonLambdaLayersStack extends Stack {
       code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('requests-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for requests',
-      layerVersionName: requestsLambdaLayerId
+      layerVersionName: requestsLambdaLayerId,
+      removalPolicy: RemovalPolicy.RETAIN
     });
 
     const dateutilsLambdaLayerId = DefaultIdBuilder.build('dateutils-lambda-layer');
@@ -36,7 +38,8 @@ export class PythonLambdaLayersStack extends Stack {
       code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('dateutils-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for dateutils',
-      layerVersionName: dateutilsLambdaLayerId
+      layerVersionName: dateutilsLambdaLayerId,
+      removalPolicy: RemovalPolicy.RETAIN
     });
 
     const numpyLambdaLayerId = DefaultIdBuilder.build('numpy-lambda-layer');
@@ -44,7 +47,8 @@ export class PythonLambdaLayersStack extends Stack {
       code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('numpy-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for numpy',
-      layerVersionName: numpyLambdaLayerId
+      layerVersionName: numpyLambdaLayerId,
+      removalPolicy: RemovalPolicy.RETAIN
     });
 
     const pandasLambdaLayerId = DefaultIdBuilder.build('pandas-lambda-layer');
@@ -52,7 +56,8 @@ export class PythonLambdaLayersStack extends Stack {
       code: lambda.Code.fromAsset(LambdaConfig.getLambdaPythonLayerPath('pandas-layer')),
       compatibleRuntimes: [LambdaConfig.DEFAULT_PYTHON_RUNTIME],
       description: 'Python lambda layer for pandas',
-      layerVersionName: pandasLambdaLayerId
+      layerVersionName: pandasLambdaLayerId,
+      removalPolicy: RemovalPolicy.RETAIN
     });
   }
 }
