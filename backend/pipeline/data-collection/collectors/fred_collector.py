@@ -141,6 +141,13 @@ class FREDCollector(DataCollector):
                                       additional_info={"raw_data_type": type(raw_data).__name__})
             raise
     
+    def log_collection_progress(self) -> None:
+        """Log current collection progress and statistics"""
+        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
+        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
+        
+        logger.info(f"{self.collector_name} Progress: {self.results['total_success']}/{self.results['total_processed']} series completed ({success_rate:.1f}% success), {total_records:,} total records collected")
+    
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Collect FRED data with comprehensive error handling"""
         try:
@@ -173,9 +180,9 @@ class FREDCollector(DataCollector):
             logger.info(f"Processing {len(FRED_SERIES)} FRED series from {start_date} to {end_date}")
             
             # Process each series
-            for series_id in FRED_SERIES:
+            for i, series_id in enumerate(FRED_SERIES, 1):
                 try:
-                    logger.info(f"Processing FRED series: {series_id}")
+                    logger.info(f"Processing FRED series {i}/{len(FRED_SERIES)}: {series_id}")
                     
                     # Fetch data from FRED API
                     raw_data = self.fetch_fred_data(series_id, api_key, start_date, end_date)
@@ -203,6 +210,10 @@ class FREDCollector(DataCollector):
                             item_id=series_id,
                             error='No data returned from FRED API'
                         )
+                    
+                    # Log progress every 3 series
+                    if i % 3 == 0 or i == len(FRED_SERIES):
+                        self.log_collection_progress()
                     
                     # Rate limiting - FRED allows 1200 requests per minute with API key
                     time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests

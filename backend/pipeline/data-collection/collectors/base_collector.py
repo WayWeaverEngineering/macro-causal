@@ -284,6 +284,72 @@ class DataCollector:
         logger.info(f"Starting {self.collector_name} data collection")
     
     def log_collection_end(self) -> None:
-        """Log the end of data collection"""
+        """Log the end of data collection with comprehensive summary"""
         self.results['end_time'] = datetime.now(timezone.utc).isoformat()
+        
+        # Calculate summary statistics
+        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
+        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
+        
+        # Log basic completion info
         logger.info(f"Completed {self.collector_name} data collection: {self.results['total_success']} successful, {self.results['total_failed']} failed")
+        
+        # Log detailed summary
+        logger.info(f"{self.collector_name} Collection Summary:")
+        logger.info(f"   • Total items processed: {self.results['total_processed']}")
+        logger.info(f"   • Successful collections: {self.results['total_success']}")
+        logger.info(f"   • Failed collections: {self.results['total_failed']}")
+        logger.info(f"   • Success rate: {success_rate:.1f}%")
+        logger.info(f"   • Total records collected: {total_records:,}")
+        
+        # Log successful items with record counts
+        if self.results['success']:
+            logger.info(f"   • Successful items:")
+            for result in self.results['success']:
+                item_id = result.get('item_id', 'Unknown')
+                records = result.get('records_count', 0)
+                date_range = result.get('date_range', '')
+                if date_range:
+                    logger.info(f"     - {item_id}: {records:,} records ({date_range})")
+                else:
+                    logger.info(f"     - {item_id}: {records:,} records")
+        
+        # Log failed items
+        if self.results['failed']:
+            logger.info(f"   • Failed items:")
+            for result in self.results['failed']:
+                item_id = result.get('item_id', 'Unknown')
+                error = result.get('error', 'Unknown error')
+                logger.info(f"     - {item_id}: {error}")
+
+    def get_collection_summary(self) -> Dict[str, Any]:
+        """Get a comprehensive summary of the collection results"""
+        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
+        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
+        
+        return {
+            'collector_name': self.collector_name,
+            'total_processed': self.results['total_processed'],
+            'total_success': self.results['total_success'],
+            'total_failed': self.results['total_failed'],
+            'total_records_collected': total_records,
+            'success_rate_percent': round(success_rate, 1),
+            'start_time': self.results['start_time'],
+            'end_time': self.results['end_time'],
+            'successful_items': [
+                {
+                    'item_id': result.get('item_id'),
+                    'records_count': result.get('records_count', 0),
+                    'date_range': result.get('date_range', ''),
+                    's3_key': result.get('s3_key', '')
+                }
+                for result in self.results['success']
+            ],
+            'failed_items': [
+                {
+                    'item_id': result.get('item_id'),
+                    'error': result.get('error', 'Unknown error')
+                }
+                for result in self.results['failed']
+            ]
+        }

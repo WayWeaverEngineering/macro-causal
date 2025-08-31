@@ -29,6 +29,69 @@ s3_client = boto3.client('s3')
 
 BRONZE_BUCKET = os.environ.get('BRONZE_BUCKET')
 
+def log_pipeline_summary(all_results: dict) -> None:
+    """Log a comprehensive summary of the entire pipeline"""
+    logger.info("=" * 80)
+    logger.info("DATA COLLECTION PIPELINE SUMMARY")
+    logger.info("=" * 80)
+    
+    # Calculate overall statistics
+    total_records = 0
+    total_success = 0
+    total_failed = 0
+    collector_summaries = []
+    
+    for collector_name, result in all_results.items():
+        if collector_name in ['pipeline_start_time', 'pipeline_end_time', 'overall_status']:
+            continue
+            
+        if isinstance(result, dict) and 'error' not in result:
+            # Get summary from collector
+            if hasattr(result, 'get_collection_summary'):
+                summary = result.get_collection_summary()
+            else:
+                # Fallback for old format
+                summary = {
+                    'collector_name': collector_name,
+                    'total_processed': result.get('total_processed', 0),
+                    'total_success': result.get('total_success', 0),
+                    'total_failed': result.get('total_failed', 0),
+                    'total_records_collected': sum(r.get('records_count', 0) for r in result.get('success', [])),
+                    'success_rate_percent': 0
+                }
+            
+            total_records += summary['total_records_collected']
+            total_success += summary['total_success']
+            total_failed += summary['total_failed']
+            collector_summaries.append(summary)
+        else:
+            logger.warning(f"{collector_name.upper()}: Collection failed or no results available")
+    
+    # Log overall statistics
+    logger.info(f"OVERALL STATISTICS:")
+    logger.info(f"   • Total records collected: {total_records:,}")
+    logger.info(f"   • Total successful collections: {total_success}")
+    logger.info(f"   • Total failed collections: {total_failed}")
+    logger.info(f"   • Overall success rate: {(total_success / (total_success + total_failed) * 100):.1f}%" if (total_success + total_failed) > 0 else "N/A")
+    
+    # Log individual collector summaries
+    logger.info(f"COLLECTOR BREAKDOWN:")
+    for summary in collector_summaries:
+        logger.info(f"   • {summary['collector_name']}: {summary['total_records_collected']:,} records ({summary['success_rate_percent']}% success)")
+    
+    # Log timing information
+    if all_results.get('pipeline_start_time') and all_results.get('pipeline_end_time'):
+        start_time = datetime.fromisoformat(all_results['pipeline_start_time'].replace('Z', '+00:00'))
+        end_time = datetime.fromisoformat(all_results['pipeline_end_time'].replace('Z', '+00:00'))
+        duration = end_time - start_time
+        logger.info(f"PIPELINE TIMING:")
+        logger.info(f"   • Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"   • End time: {end_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        logger.info(f"   • Total duration: {duration}")
+    
+    logger.info(f"OVERALL STATUS: {all_results.get('overall_status', 'unknown').upper()}")
+    logger.info("=" * 80)
+
 def main():
     """Main function to run data collection"""
     try:
@@ -82,6 +145,9 @@ def main():
         
         # Record completion time
         all_results['pipeline_end_time'] = datetime.now(timezone.utc).isoformat()
+        
+        # Log comprehensive pipeline summary
+        log_pipeline_summary(all_results)
         
         # Save overall results to S3
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')

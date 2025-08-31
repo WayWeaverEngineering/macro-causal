@@ -330,6 +330,13 @@ class YahooFinanceCollector(DataCollector):
                 'regularMarketTime': 0
             }
     
+    def log_collection_progress(self) -> None:
+        """Log current collection progress and statistics"""
+        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
+        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
+        
+        logger.info(f"{self.collector_name} Progress: {self.results['total_success']}/{self.results['total_processed']} symbols completed ({success_rate:.1f}% success), {total_records:,} total records collected")
+    
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Collect Yahoo Finance data with comprehensive error handling"""
         try:
@@ -353,9 +360,9 @@ class YahooFinanceCollector(DataCollector):
             logger.info(f"Processing {len(YAHOO_SYMBOLS)} Yahoo Finance symbols from {start_date} to {end_date}")
             
             # Process each symbol
-            for symbol in YAHOO_SYMBOLS:
+            for i, symbol in enumerate(YAHOO_SYMBOLS, 1):
                 try:
-                    logger.info(f"Processing Yahoo Finance symbol: {symbol}")
+                    logger.info(f"Processing Yahoo Finance symbol {i}/{len(YAHOO_SYMBOLS)}: {symbol}")
                     
                     # Fetch price data
                     df = self.fetch_yahoo_data(symbol, start_date, end_date)
@@ -406,6 +413,10 @@ class YahooFinanceCollector(DataCollector):
                             item_id=f"{symbol}/price",
                             error='No price data returned from Yahoo Finance API'
                         )
+                    
+                    # Log progress every 5 symbols
+                    if i % 5 == 0 or i == len(YAHOO_SYMBOLS):
+                        self.log_collection_progress()
                     
                     # Rate limiting - be respectful to Yahoo Finance
                     time.sleep(1)  # 1 second between requests

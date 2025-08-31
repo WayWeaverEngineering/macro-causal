@@ -124,6 +124,13 @@ class WorldBankCollector(DataCollector):
                                       additional_info={"raw_data_length": len(raw_data) if raw_data else 0})
             raise
     
+    def log_collection_progress(self) -> None:
+        """Log current collection progress and statistics"""
+        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
+        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
+        
+        logger.info(f"{self.collector_name} Progress: {self.results['total_success']}/{self.results['total_processed']} combinations completed ({success_rate:.1f}% success), {total_records:,} total records collected")
+    
     def collect(self, start_date: int = None, end_date: int = None) -> Dict[str, Any]:
         """Collect World Bank data with comprehensive error handling"""
         try:
@@ -147,10 +154,14 @@ class WorldBankCollector(DataCollector):
             logger.info(f"Processing {len(COUNTRIES)} countries and {len(WORLDBANK_INDICATORS)} indicators from {start_date} to {end_date}")
             
             # Process each country and indicator combination
+            combination_count = 0
+            total_combinations = len(COUNTRIES) * len(WORLDBANK_INDICATORS)
+            
             for country_code in COUNTRIES:
                 for indicator in WORLDBANK_INDICATORS:
+                    combination_count += 1
                     try:
-                        logger.info(f"Processing World Bank: {country_code}/{indicator}")
+                        logger.info(f"Processing World Bank {combination_count}/{total_combinations}: {country_code}/{indicator}")
                         
                         # Fetch data from World Bank API
                         raw_data = self.fetch_worldbank_data(country_code, indicator, start_date, end_date)
@@ -185,6 +196,10 @@ class WorldBankCollector(DataCollector):
                                 item_id=f"{country_code}/{indicator}",
                                 error='No data returned from World Bank API'
                             )
+                        
+                        # Log progress every 10 combinations
+                        if combination_count % 10 == 0 or combination_count == total_combinations:
+                            self.log_collection_progress()
                         
                         # Rate limiting - World Bank allows 100 requests per minute
                         time.sleep(0.6)  # 100 requests per minute = 0.6 seconds between requests
