@@ -48,10 +48,11 @@ export class EmrClusterConstruct extends Construct {
     
 
     // Create EMR Serverless Application
-    this.application = new emrserverless.CfnApplication(this, DefaultIdBuilder.build('emr-serverless-app'), {
+    const emrServerlessApplicationId = DefaultIdBuilder.build('emr-serverless-app');
+    this.application = new emrserverless.CfnApplication(this, emrServerlessApplicationId, {
       name: props.name,
       type: 'SPARK',
-      releaseLabel: 'emr-6.15.0',
+      releaseLabel: `${emrServerlessApplicationId}-emr-7.0.0`,
       initialCapacity: [
         {
           key: 'DRIVER',
