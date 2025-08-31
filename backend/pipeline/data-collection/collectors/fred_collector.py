@@ -50,9 +50,8 @@ class FREDCollector(DataCollector):
                 'sort_order': 'asc'
             }
             
-            # Add API key if available
-            if api_key:
-                params['api_key'] = api_key
+            # Add API key (required)
+            params['api_key'] = api_key
             
             # Add date parameters
             params['observation_start'] = start_date
@@ -123,14 +122,14 @@ class FREDCollector(DataCollector):
             # Log collection start
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
-            # Get API key (optional)
-            api_key = self.get_api_key('FRED_API_KEY')
+            # Get API key (required)
+            api_key = self.get_api_key('API_KEY')
             if not api_key:
-                logger.warning("FRED API key not found. Using limited access mode (120 requests/minute).")
-                logger.warning("For production use, please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
-                logger.warning("Set API_SECRETS_ARN environment variable and add FRED_API_KEY to the secret for full access.")
-                # Continue without API key (limited rate)
-                api_key = None
+                error_msg = "FRED API key not found. API key is required for data collection."
+                logger.error(error_msg)
+                logger.error("Please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
+                logger.error("Set API_SECRETS_ARN environment variable and add FRED_API_KEY to the secret.")
+                raise ValueError(error_msg)
             
             # Determine date range (last 30 days by default)
             if not end_date or not start_date:
@@ -176,11 +175,8 @@ class FREDCollector(DataCollector):
                             error='No data returned from FRED API'
                         )
                     
-                    # Rate limiting - FRED allows 120 requests per minute without API key, 1200 with API key
-                    if api_key:
-                        time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests
-                    else:
-                        time.sleep(0.5)  # 120 requests per minute = 0.5 seconds between requests (same for now)
+                    # Rate limiting - FRED allows 1200 requests per minute with API key
+                    time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests
                     
                 except Exception as e:
                     logger.error(f"Failed to process FRED series {series_id}: {e}")
