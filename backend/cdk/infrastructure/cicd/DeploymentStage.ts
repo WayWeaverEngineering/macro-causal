@@ -28,11 +28,11 @@ export class DeploymentStage extends Stage {
       region: this.region ?? DEFAULT_REGION,
     });
 
-    const dataCollectionStackId = DefaultIdBuilder.build('data-collection-stack');
-    const dataCollectionStack = new MLPipelineStack(this, dataCollectionStackId, {
+    const mlPipelineStackId = DefaultIdBuilder.build('ml-pipeline-stack');
+    const mlPipelineStack = new MLPipelineStack(this, mlPipelineStackId, {
       dataLakeStack
     });
 
-    dataCollectionStack.addDependency(dataLakeStack);
+    mlPipelineStack.addDependency(dataLakeStack);
   }
 }
