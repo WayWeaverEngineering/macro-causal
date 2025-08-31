@@ -7,8 +7,6 @@ import { AwsConfig } from '../configs/AwsConfig';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as events from 'aws-cdk-lib/aws-events';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 
 export interface MLPipelineStackProps extends StackProps {
