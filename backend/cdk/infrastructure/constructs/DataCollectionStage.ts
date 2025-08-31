@@ -77,20 +77,25 @@ export class DataCollectionStage extends Construct {
       resultPath: '$.dataCollectionResult'
     });
 
+    // Create a pass state for successful data collection (to allow chaining)
+    const dataCollectionSuccess = new sfn.Pass(this, `${dataCollectionStageName}-success`, {
+      comment: 'Data collection completed successfully'
+    });
+
+    // Create a fail state for failed data collection
+    const dataCollectionFailure = new sfn.Fail(this, `${dataCollectionStageName}-failed`, {
+      error: 'DataCollectionFailed',
+      cause: 'Data collection stage failed',
+      comment: 'Data collection stage encountered an error'
+    });
+
     const validateDataCollectionId = DefaultIdBuilder.build(`validate-${dataCollectionStageName}`);
     const validation = new sfn.Choice(this, validateDataCollectionId, {
       stateName: `validate-${dataCollectionStageName}`
     });
 
-    validation.when(sfn.Condition.stringEquals('$.dataCollectionResult.status', 'SUCCESS'), new sfn.Succeed(this, `${dataCollectionStageName}-success`, {
-      comment: 'Data collection completed successfully'
-    }));
-
-    validation.otherwise(new sfn.Fail(this, `${dataCollectionStageName}-failed`, {
-      error: 'DataCollectionFailed',
-      cause: 'Data collection stage failed',
-      comment: 'Data collection stage encountered an error'
-    }));
+    validation.when(sfn.Condition.stringEquals('$.dataCollectionResult.status', 'SUCCESS'), dataCollectionSuccess);
+    validation.otherwise(dataCollectionFailure);
 
     this.workflow = sfn.Chain
       .start(dataCollectionTask)
