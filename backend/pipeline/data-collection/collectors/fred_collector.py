@@ -79,8 +79,6 @@ class FREDCollector(DataCollector):
             params['observation_start'] = start_date
             params['observation_end'] = end_date
                 
-            logger.info(f"Fetching FRED data for series: {series_id} from {start_date} to {end_date}")
-            
             # Use the enhanced HTTP request method from base collector
             response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
             
@@ -91,7 +89,6 @@ class FREDCollector(DataCollector):
                 conservative_start, conservative_end = self.get_default_date_range(7)
                 params['observation_start'] = conservative_start
                 params['observation_end'] = conservative_end
-                logger.info(f"Retrying FRED data for series: {series_id} from {conservative_start} to {conservative_end}")
                 response = self.make_http_request(FRED_BASE_URL, params=params, timeout=30)
             
             return response.json()
@@ -133,20 +130,12 @@ class FREDCollector(DataCollector):
             df['source'] = 'FRED'
             df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
-            logger.info(f"Processed {len(df)} records for FRED series {series_id}")
             return df
             
         except Exception as e:
             self.log_consolidated_error(f"FRED data processing for {series_id}", e,
                                       additional_info={"raw_data_type": type(raw_data).__name__})
             raise
-    
-    def log_collection_progress(self) -> None:
-        """Log current collection progress and statistics"""
-        total_records = sum(result.get('records_count', 0) for result in self.results['success'])
-        success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
-        
-        logger.info(f"{self.collector_name} Progress: {self.results['total_success']}/{self.results['total_processed']} series completed ({success_rate:.1f}% success), {total_records:,} total records collected")
     
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Collect FRED data with comprehensive error handling"""
@@ -177,13 +166,9 @@ class FREDCollector(DataCollector):
             self.results['end_date'] = end_date
             self.results['total_series'] = len(FRED_SERIES)
             
-            logger.info(f"Processing {len(FRED_SERIES)} FRED series from {start_date} to {end_date}")
-            
             # Process each series
             for i, series_id in enumerate(FRED_SERIES, 1):
                 try:
-                    logger.info(f"Processing FRED series {i}/{len(FRED_SERIES)}: {series_id}")
-                    
                     # Fetch data from FRED API
                     raw_data = self.fetch_fred_data(series_id, api_key, start_date, end_date)
                     
@@ -210,10 +195,6 @@ class FREDCollector(DataCollector):
                             item_id=series_id,
                             error='No data returned from FRED API'
                         )
-                    
-                    # Log progress every 3 series
-                    if i % 3 == 0 or i == len(FRED_SERIES):
-                        self.log_collection_progress()
                     
                     # Rate limiting - FRED allows 1200 requests per minute with API key
                     time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests

@@ -157,11 +157,7 @@ class DataCollector:
             secrets = json.loads(response['SecretString'])
             api_key = secrets.get(key_name, '')
             
-            if api_key:
-                logger.info(f"Successfully retrieved API key '{key_name}' from Secrets Manager")
-                # Log partial key for debugging (first 4 chars)
-                masked_key = api_key[:4] + '*' * (len(api_key) - 8) + api_key[-4:] if len(api_key) > 8 else '****'
-            else:
+            if not api_key:
                 logger.warning(f"API key '{key_name}' not found in Secrets Manager secret")
                 
             return api_key
@@ -227,7 +223,6 @@ class DataCollector:
                 Body=buffer.getvalue()
             )
             
-            logger.info(f"Saved {len(df)} records to s3://{bucket}/{s3_path}")
             return s3_path
             
         except Exception as e:
@@ -248,8 +243,6 @@ class DataCollector:
         self.results['success'].append(result)
         self.results['total_success'] += 1
         self.results['total_processed'] += 1
-        
-        logger.info(f"Successfully processed {item_id}: {records_count} records")
     
     def add_failed_result(self, item_id: str, error: str, **kwargs) -> None:
         """Add a failed result to the collection results"""
