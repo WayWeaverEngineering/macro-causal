@@ -147,7 +147,7 @@ export class DataProcessingStage extends Construct {
       .otherwise(waitState);
 
     // Connect wait state back to check status task
-    waitState.next(checkStatusTask).next(jobStatusChoice);
+    waitState.next(jobStatusChoice);
 
     // Build the job monitoring workflow
     const dataProcessingTask = startJobTask
