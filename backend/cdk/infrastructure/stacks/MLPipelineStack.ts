@@ -46,6 +46,7 @@ export class MLPipelineStack extends Stack {
     // Create Step Functions task for data collection stage
     const dataCollectionTaskId = DefaultIdBuilder.build('data-collection-task');
     const dataCollectionTask = new tasks.EcsRunTask(this, dataCollectionTaskId, {
+      stateName: "DataCollection",
       cluster: dataCollectionStage.service.cluster,
       taskDefinition: dataCollectionStage.service.taskDefinition,
       integrationPattern: sfn.IntegrationPattern.RUN_JOB,
@@ -60,7 +61,8 @@ export class MLPipelineStack extends Stack {
         containerDefinition: dataCollectionStage.service.taskDefinition.defaultContainer!,
         environment: [
           { name: 'EXECUTION_MODE', value: 'step-functions' },
-          { name: 'PIPELINE_EXECUTION_ID', value: sfn.JsonPath.stringAt('$.executionId') }
+          { name: 'PIPELINE_EXECUTION_ID', value: sfn.JsonPath.stringAt('$$.Execution.Id') },
+          { name: 'EXECUTION_START_TIME', value: sfn.JsonPath.stringAt('$$.Execution.StartTime') }
         ]
       }],
       
@@ -73,7 +75,10 @@ export class MLPipelineStack extends Stack {
 
     // Add validation for data collection success/failure
     const validateDataCollectionId = DefaultIdBuilder.build('validate-data-collection');
-    const validateDataCollection = new sfn.Choice(this, validateDataCollectionId)
+    const validateDataCollection = new sfn
+      .Choice(this, validateDataCollectionId, {
+        stateName: "ValidateDataCollection"
+      })
       .when(sfn.Condition.stringEquals('$.dataCollectionResult.status', 'SUCCESS'), 
         new sfn.Succeed(this, 'DataCollectionSuccess', {
           comment: 'Data collection completed successfully'
