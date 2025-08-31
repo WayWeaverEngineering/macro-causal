@@ -50,7 +50,7 @@ export class EmrClusterConstruct extends Construct {
     this.application = new emrserverless.CfnApplication(this, emrServerlessApplicationId, {
       name: props.name,
       type: 'SPARK',
-      releaseLabel: `${emrServerlessApplicationId}-emr-7.0.0`,
+      releaseLabel: 'emr-7.0.0',
       initialCapacity: [
         {
           key: 'DRIVER',
