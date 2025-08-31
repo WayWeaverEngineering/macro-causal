@@ -6,6 +6,7 @@ import { DefaultIdBuilder } from '../../utils/Naming';
 
 export interface EmrClusterProps {
   name: string;
+  imageUri: string;
   bronzeBucket: s3.Bucket;
   silverBucket: s3.Bucket;
   goldBucket: s3.Bucket;
@@ -43,6 +44,8 @@ export class EmrClusterConstruct extends Construct {
       ],
       resources: ['*']
     }));
+
+    
 
     // Create EMR Serverless Application
     this.application = new emrserverless.CfnApplication(this, DefaultIdBuilder.build('emr-serverless-app'), {
@@ -86,7 +89,7 @@ export class EmrClusterConstruct extends Construct {
         enabled: true
       },
       imageConfiguration: {
-        imageUri: 'public.ecr.aws/emr-serverless/spark/emr-6.15.0:latest'
+        imageUri: props.imageUri
       },
       networkConfiguration: {
         // TODO: configure this if VPC is needed

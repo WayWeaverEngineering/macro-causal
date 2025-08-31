@@ -7,6 +7,7 @@ import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "a
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { Duration } from 'aws-cdk-lib';
 import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
@@ -24,10 +25,25 @@ export class DataProcessingStage extends Construct {
     super(scope, id);
 
     const dataProcessingStageName = 'data-processing';
+
+    // Create Docker image asset for data processing code
+    const dataProcessingImageId = DefaultIdBuilder.build('data-processing-image');
+    const dataProcessingImage = new ecrAssets.DockerImageAsset(this, dataProcessingImageId, {
+      // IMPORTANT: the image path is relative to cdk.out
+      directory: `../pipeline/${dataProcessingStageName}`,
+      platform: ecrAssets.Platform.LINUX_AMD64,
+      buildArgs: {
+        'SPARK_VERSION': '3.4.0',
+        'PYTHON_VERSION': '3.10'
+      }
+    });
+
+    
     const dataProcessingEmrId = DefaultIdBuilder.build(`${dataProcessingStageName}-emr`);
     const emrCluster = new EmrClusterConstruct(
       this, dataProcessingEmrId, {
       name: dataProcessingStageName,
+      imageUri: dataProcessingImage.imageUri,
       bronzeBucket: props.dataLakeStack.bronzeBucket,
       silverBucket: props.dataLakeStack.silverBucket,
       goldBucket: props.dataLakeStack.goldBucket
