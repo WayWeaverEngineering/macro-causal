@@ -22,7 +22,7 @@ export class PipelineStageConstruct extends Construct {
 
     const imgId = DefaultIdBuilder.build(`${props.stageName}-img`);
     const img = new ecrAssets.DockerImageAsset(this, imgId, {
-      directory: `../../../pipeline/${props.stageName}`,
+      directory: `../../pipeline/${props.stageName}`,
       platform: ecrAssets.Platform.LINUX_AMD64,
     });
 
