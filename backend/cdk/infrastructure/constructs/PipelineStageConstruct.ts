@@ -49,7 +49,7 @@ export class PipelineStageConstruct extends Construct {
 
     const serviceId = DefaultIdBuilder.build(`${props.stageName}-service`);
     this.service = new ecs.FargateService(this, serviceId, {
-      cluster, taskDefinition: task, desiredCount: 1,
+      cluster, taskDefinition: task, desiredCount: 0, // Don't run continuously - Step Functions will trigger tasks
       assignPublicIp: false,
     });
   }
