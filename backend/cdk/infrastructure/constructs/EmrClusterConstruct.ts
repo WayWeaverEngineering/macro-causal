@@ -91,11 +91,6 @@ export class EmrClusterConstruct extends Construct {
       },
       imageConfiguration: {
         imageUri: props.imageUri
-      },
-      networkConfiguration: {
-        // TODO: configure this if VPC is needed
-        subnetIds: [],
-        securityGroupIds: []
       }
     });
   }
