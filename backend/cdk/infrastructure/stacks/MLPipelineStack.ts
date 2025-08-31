@@ -15,7 +15,10 @@ export class MLPipelineStack extends Stack {
 
     const dataCollectionStage = new PipelineStageConstruct(
       this, DefaultIdBuilder.build('data-collection-stage'), {
-      stageName: 'data-collection'
+      stageName: 'data-collection',
+      environment: {
+        BRONZE_BUCKET: props.dataLakeStack.bronzeBucket.bucketName,
+      }
     });
 
     // Enable data collection stage to write raw data to bronze bucket

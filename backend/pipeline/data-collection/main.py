@@ -27,8 +27,6 @@ logger = logging.getLogger(__name__)
 # Initialize AWS clients
 s3_client = boto3.client('s3')
 
-# Environment variables
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
 BRONZE_BUCKET = os.environ.get('BRONZE_BUCKET')
 
 def main():
