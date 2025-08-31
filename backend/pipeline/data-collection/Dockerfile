@@ -18,6 +18,7 @@ RUN pip install --upgrade pip && \
 
 # Copy application code
 COPY main.py .
+COPY collectors/ ./collectors/
 
 # Expose port for potential health checks
 EXPOSE 8080
