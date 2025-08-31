@@ -7,5 +7,8 @@ export class AwsConfig {
   static readonly OPENAI_API_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:715067592333:secret:sec-ai-analyst-openai-api-secrets-sV98gJ"
   static readonly OPENAI_API_SECRET_ID = "sec-ai-analyst-openai-api-secrets"
 
+  static readonly FRED_API_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:715067592333:secret:fred-api-secrets-A1g2T4"
+  static readonly FRED_API_SECRET_ID = "fred-api-secrets"
+
   static readonly QUEUE_TIMEOUT_MINS = Duration.minutes(15)
 }
