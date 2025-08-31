@@ -57,6 +57,8 @@ export class CodeBuildPipeline extends CodePipeline {
           }),
         ],
       },
+      // Enable CodeBuild to build the code using Docker
+      dockerEnabledForSynth: true,
       synth: new ShellStep(DefaultIdBuilder.build('code-build-shell-script'), {
           input: CodePipelineSource.connection(
             GitHubConfig.GITHUB_REPO,
@@ -70,7 +72,7 @@ export class CodeBuildPipeline extends CodePipeline {
             "pwd",
 
             // Build the frontend
-            "cd frontend", 
+            "cd frontend",
             "npm ci",
             "npm run build",
 
@@ -79,12 +81,7 @@ export class CodeBuildPipeline extends CodePipeline {
             "echo Obtaining npm credentials...",
             "chmod +x ./scripts/npm-authenticate.sh",
             "./scripts/npm-authenticate.sh",
-            "echo Building Python Lambda layers...",
-            "cd ../lambda/python/layers",
-            "chmod +x ./build_all_layers.sh",
-            "./build_all_layers.sh",
             "echo Synthesizing CDK stack...",
-            "cd ../../../cdk",
             "npm ci",
             "npm run build",
             "npx cdk synth"
