@@ -23,7 +23,7 @@ export class EmrClusterConstruct extends Construct {
     this.executionRole = new iam.Role(this, DefaultIdBuilder.build('emr-serverless-execution-role'), {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEMRServerlessServiceRolePolicy')
+        iam.ManagedPolicy.fromAwsManagedPolicyName("aws-service-role/AmazonEMRServerlessServiceRolePolicy")
       ]
     });
 
