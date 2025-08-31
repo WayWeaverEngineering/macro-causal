@@ -3,7 +3,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { DefaultIdBuilder } from '../../utils/Naming';
 
-export interface PipelineStageProps {
+export interface EcsStageProps {
   stageName: string;
   cpu?: number;
   memoryLimitMiB?: number;
@@ -11,11 +11,11 @@ export interface PipelineStageProps {
   environment?: { [key: string]: string };
 }
 
-export class PipelineStageConstruct extends Construct {
+export class EcsStageConstruct extends Construct {
 
   public readonly service: ecs.FargateService;
 
-  constructor(scope: Construct, id: string, props: PipelineStageProps) {
+  constructor(scope: Construct, id: string, props: EcsStageProps) {
     super(scope, id);
 
     const clusterId = DefaultIdBuilder.build(`${props.stageName}-cluster`);

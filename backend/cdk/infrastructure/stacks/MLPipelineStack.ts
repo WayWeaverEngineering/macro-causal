@@ -1,7 +1,7 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { PipelineStageConstruct } from '../constructs/PipelineStageConstruct';
+import { EcsStageConstruct } from '../constructs/EcsStageConstruct';
 import { DataLakeStack } from './DataLakeStack';
 import { AwsConfig } from '../configs/AwsConfig';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
@@ -19,7 +19,7 @@ export class MLPipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: MLPipelineStackProps) {
     super(scope, id, props);
 
-    const dataCollectionStage = new PipelineStageConstruct(
+    const dataCollectionStage = new EcsStageConstruct(
       this, DefaultIdBuilder.build('data-collection-stage'), {
       stageName: 'data-collection',
       environment: {
