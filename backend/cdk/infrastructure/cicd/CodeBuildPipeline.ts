@@ -71,6 +71,10 @@ export class CodeBuildPipeline extends CodePipeline {
             // Print current directory for debugging
             "pwd",
 
+            // Upgrade pip to latest version
+            "echo Upgrading pip...",
+            "python3 -m pip install --upgrade pip",
+
             // Build the frontend
             "cd frontend",
             "npm ci",
