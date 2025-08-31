@@ -34,6 +34,8 @@ WORLDBANK_INDICATORS = [
 # Target countries (major economies)
 COUNTRIES = ['US', 'CN', 'JP', 'DE', 'GB', 'FR', 'IN', 'IT', 'CA', 'BR']
 
+DEFAULT_YEARS_BACK = 75
+
 class WorldBankCollector(DataCollector):
     """World Bank data collector with enhanced error handling"""
     
@@ -59,11 +61,11 @@ class WorldBankCollector(DataCollector):
                 except ValueError:
                     # If dates are not years, use current year
                     current_year = datetime.now(timezone.utc).year
-                    params['date'] = f"{current_year-75}:{current_year}"
+                    params['date'] = f"{current_year-DEFAULT_YEARS_BACK}:{current_year}"
             else:
-                # Default to last 75 years
+                # Default to last DEFAULT_YEARS_BACK years
                 current_year = datetime.now(timezone.utc).year
-                params['date'] = f"{current_year-75}:{current_year}"
+                params['date'] = f"{current_year-DEFAULT_YEARS_BACK}:{current_year}"
             
             # Use the enhanced HTTP request method from base collector
             response = self.make_http_request(url, params=params, timeout=30)
@@ -131,11 +133,11 @@ class WorldBankCollector(DataCollector):
             # Log collection start
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
-            # Determine date range (last 75 years by default)
+            # Determine date range (last DEFAULT_YEARS_BACK years by default)
             if not end_date:
                 end_date = datetime.now(timezone.utc).year
             if not start_date:
-                start_date = end_date - 75
+                start_date = end_date - DEFAULT_YEARS_BACK
             
             self.results['start_date'] = start_date
             self.results['end_date'] = end_date

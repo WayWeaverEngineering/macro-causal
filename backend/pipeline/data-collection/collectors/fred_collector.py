@@ -29,6 +29,8 @@ FRED_SERIES = [
     'PAYEMS'         # Total Nonfarm Payrolls
 ]
 
+DEFAULT_DAYS_BACK = 27375 # 75 years = 365 * 75 days
+
 class FREDCollector(DataCollector):
     """FRED data collector with enhanced error handling"""
     
@@ -40,7 +42,7 @@ class FREDCollector(DataCollector):
         try:
             # Validate and fix date range
             if not start_date or not end_date:
-                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
+                start_date, end_date = self.get_default_date_range(DEFAULT_DAYS_BACK)
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             
@@ -56,7 +58,7 @@ class FREDCollector(DataCollector):
                 
                 if start_dt > current_dt:
                     self.logger.warning(f"Start date {start_date} is still in the future after validation, using 75 years ago")
-                    start_date = (current_dt - timedelta(days=27375)).strftime('%Y-%m-%d')
+                    start_date = (current_dt - timedelta(days=DEFAULT_DAYS_BACK)).strftime('%Y-%m-%d')
                 
                 if end_dt > current_dt:
                     self.logger.warning(f"End date {end_date} is still in the future after validation, using today")
@@ -64,7 +66,7 @@ class FREDCollector(DataCollector):
                     
             except ValueError as e:
                 self.logger.warning(f"Date parsing error: {e}, using default date range")
-                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
+                start_date, end_date = self.get_default_date_range(DEFAULT_DAYS_BACK)  
             
             params = {
                 'series_id': series_id,
@@ -158,7 +160,7 @@ class FREDCollector(DataCollector):
             
             # Determine date range (last 75 years by default)
             if not end_date or not start_date:
-                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
+                start_date, end_date = self.get_default_date_range(DEFAULT_DAYS_BACK)
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             

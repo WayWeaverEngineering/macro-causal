@@ -57,6 +57,8 @@ YAHOO_SYMBOLS = [
     'USDCAD=X', # US Dollar/Canadian Dollar
 ]
 
+DEFAULT_DAYS_BACK = 27375 # 75 years = 365 * 75 days
+
 class YahooFinanceCollector(DataCollector):
     """Yahoo Finance data collector using direct API calls with workarounds for API restrictions"""
     
@@ -113,7 +115,7 @@ class YahooFinanceCollector(DataCollector):
         try:
             # Validate and fix date range
             if not start_date or not end_date:
-                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
+                start_date, end_date = self.get_default_date_range(DEFAULT_DAYS_BACK)
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             
@@ -335,9 +337,9 @@ class YahooFinanceCollector(DataCollector):
             # Log collection start
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
-            # Determine date range (last 75 years by default)
+            # Determine date range (last DEFAULT_DAYS_BACK years by default)
             if not end_date or not start_date:
-                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
+                start_date, end_date = self.get_default_date_range(DEFAULT_DAYS_BACK)
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             
