@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
 Yahoo Finance Data Collector
-Collects financial market data from Yahoo Finance
+Collects financial market data from Yahoo Finance using direct API calls
 """
 
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 import logging
 import time
-import yfinance as yf
+import requests
+import json
 from typing import Dict, Any, Optional
 from .base_collector import DataCollector, BRONZE_BUCKET
 
@@ -40,7 +41,6 @@ YAHOO_SYMBOLS = [
     'META',     # Meta Platforms Inc.
     'BRK-B',    # Berkshire Hathaway Inc.
     'JPM',      # JPMorgan Chase & Co.
-    'JNJ',      # Johnson & Johnson (may have timezone issues)
     
     # Commodities
     'GC=F',     # Gold Futures
@@ -63,13 +63,79 @@ SYMBOL_ALTERNATIVES = {
 }
 
 class YahooFinanceCollector(DataCollector):
-    """Yahoo Finance data collector with enhanced error handling"""
+    """Yahoo Finance data collector using direct API calls"""
     
     def __init__(self):
         super().__init__(collector_name="YahooFinance")
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+    
+    def _get_yahoo_crumb(self, symbol: str) -> str:
+        """Get Yahoo Finance crumb for API authentication"""
+        try:
+            # First get the quote page to extract crumb
+            quote_url = f"https://finance.yahoo.com/quote/{symbol}"
+            response = self.session.get(quote_url, timeout=10)
+            response.raise_for_status()
+            
+            # Extract crumb from the page
+            content = response.text
+            crumb_start = content.find('"CrumbStore":{"crumb":"') + 22
+            crumb_end = content.find('"', crumb_start)
+            crumb = content[crumb_start:crumb_end]
+            
+            return crumb
+        except Exception as e:
+            logger.warning(f"Could not get crumb for {symbol}: {e}")
+            return ""
+    
+    def _get_historical_data_url(self, symbol: str, start_date: int, end_date: int, crumb: str = "") -> str:
+        """Construct Yahoo Finance historical data URL"""
+        base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
+        
+        # URL parameters
+        params = {
+            'symbol': symbol,
+            'period1': start_date,
+            'period2': end_date,
+            'interval': '1d',
+            'includePrePost': 'false',
+            'events': 'div,split',
+            'lang': 'en-US',
+            'region': 'US'
+        }
+        
+        if crumb:
+            params['crumb'] = crumb
+        
+        # Build query string
+        query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        return f"{base_url}{symbol}?{query_string}"
+    
+    def _get_quote_data_url(self, symbol: str) -> str:
+        """Construct Yahoo Finance quote data URL"""
+        base_url = "https://query1.finance.yahoo.com/v7/finance/quote"
+        params = {
+            'symbols': symbol,
+            'lang': 'en-US',
+            'region': 'US'
+        }
+        query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        return f"{base_url}?{query_string}"
+    
+    def _date_to_timestamp(self, date_str: str) -> int:
+        """Convert date string to Unix timestamp"""
+        try:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            return int(dt.timestamp())
+        except ValueError:
+            # If date parsing fails, use current date
+            return int(datetime.now().timestamp())
     
     def fetch_yahoo_data(self, symbol: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        """Fetch data for a specific Yahoo Finance symbol with enhanced error handling"""
+        """Fetch data for a specific Yahoo Finance symbol using direct API calls"""
         try:
             # Validate and fix date range
             if not start_date or not end_date:
@@ -79,53 +145,70 @@ class YahooFinanceCollector(DataCollector):
             
             logger.info(f"Fetching Yahoo Finance data for symbol: {symbol} from {start_date} to {end_date}")
             
-            # Use yfinance library to fetch data
-            ticker = yf.Ticker(symbol)
+            # Convert dates to timestamps
+            start_timestamp = self._date_to_timestamp(start_date)
+            end_timestamp = self._date_to_timestamp(end_date)
             
-            # Fetch historical data with error handling
-            try:
-                df = ticker.history(start=start_date, end=end_date, interval='1d')
-            except Exception as history_error:
-                logger.warning(f"Error fetching history for {symbol}: {history_error}")
-                # Try with different parameters
-                try:
-                    df = ticker.history(period="30d", interval='1d')
-                    logger.info(f"Successfully fetched data for {symbol} using period parameter")
-                except Exception as period_error:
-                    logger.error(f"Failed to fetch data for {symbol} with both methods: {period_error}")
-                    return pd.DataFrame()
+            # Get crumb for authentication
+            crumb = self._get_yahoo_crumb(symbol)
+            
+            # Construct URL and fetch data
+            url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp, crumb)
+            
+            response = self.session.get(url, timeout=15)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Parse the response
+            if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
+                logger.warning(f"No data returned for Yahoo Finance symbol {symbol}")
+                return pd.DataFrame()
+            
+            result = data['chart']['result'][0]
+            
+            # Extract timestamps and OHLCV data
+            timestamps = result.get('timestamp', [])
+            quote = result.get('indicators', {}).get('quote', [{}])[0]
+            
+            # Extract OHLCV data
+            opens = quote.get('open', [])
+            highs = quote.get('high', [])
+            lows = quote.get('low', [])
+            closes = quote.get('close', [])
+            volumes = quote.get('volume', [])
+            
+            # Extract dividends and splits
+            events = result.get('events', {})
+            dividends = events.get('dividends', {})
+            splits = events.get('splits', {})
+            
+            # Create DataFrame
+            df_data = []
+            for i, timestamp in enumerate(timestamps):
+                # Convert timestamp to datetime
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                
+                # Get dividend and split data for this date
+                dividend = dividends.get(str(timestamp), {}).get('amount', 0) if str(timestamp) in dividends else 0
+                split = splits.get(str(timestamp), {}).get('splitRatio', 0) if str(timestamp) in splits else 0
+                
+                df_data.append({
+                    'date': dt,
+                    'open': opens[i] if i < len(opens) and opens[i] is not None else None,
+                    'high': highs[i] if i < len(highs) and highs[i] is not None else None,
+                    'low': lows[i] if i < len(lows) and lows[i] is not None else None,
+                    'close': closes[i] if i < len(closes) and closes[i] is not None else None,
+                    'volume': volumes[i] if i < len(volumes) and volumes[i] is not None else None,
+                    'dividends': dividend,
+                    'stock_splits': split
+                })
+            
+            df = pd.DataFrame(df_data)
             
             if df.empty:
                 logger.warning(f"No data returned for Yahoo Finance symbol {symbol}")
                 return pd.DataFrame()
-            
-            # Reset index to make date a column
-            df = df.reset_index()
-            
-            # Handle timezone issues by converting to UTC
-            if 'Date' in df.columns:
-                try:
-                    # Convert timezone-aware dates to UTC
-                    if df['Date'].dt.tz is not None:
-                        df['Date'] = df['Date'].dt.tz_convert('UTC')
-                    else:
-                        # If no timezone, assume UTC
-                        df['Date'] = df['Date'].dt.tz_localize('UTC')
-                except Exception as tz_error:
-                    logger.warning(f"Timezone conversion failed for {symbol}: {tz_error}")
-                    # Continue without timezone conversion
-            
-            # Rename columns for consistency
-            df = df.rename(columns={
-                'Date': 'date',
-                'Open': 'open',
-                'High': 'high',
-                'Low': 'low',
-                'Close': 'close',
-                'Volume': 'volume',
-                'Dividends': 'dividends',
-                'Stock Splits': 'stock_splits'
-            })
             
             # Add metadata
             df['symbol'] = symbol
@@ -141,50 +224,52 @@ class YahooFinanceCollector(DataCollector):
             raise
     
     def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
-        """Get additional information about a symbol with error handling"""
+        """Get additional information about a symbol using direct API calls"""
         try:
-            ticker = yf.Ticker(symbol)
+            url = self._get_quote_data_url(symbol)
             
-            # Add timeout and retry logic for info fetching
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    info = ticker.info
-                    break
-                except Exception as info_error:
-                    if attempt == max_retries - 1:
-                        logger.warning(f"Failed to fetch info for {symbol} after {max_retries} attempts: {info_error}")
-                        raise
-                    logger.debug(f"Attempt {attempt + 1} failed for {symbol}, retrying...")
-                    time.sleep(1)
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if 'quoteResponse' not in data or 'result' not in data['quoteResponse'] or not data['quoteResponse']['result']:
+                logger.warning(f"No quote data returned for {symbol}")
+                return self._get_default_symbol_info(symbol)
+            
+            quote = data['quoteResponse']['result'][0]
             
             return {
                 'symbol': symbol,
-                'name': info.get('longName', ''),
-                'sector': info.get('sector', ''),
-                'industry': info.get('industry', ''),
-                'market_cap': info.get('marketCap', 0),
-                'currency': info.get('currency', ''),
-                'exchange': info.get('exchange', ''),
-                'country': info.get('country', ''),
-                'website': info.get('website', ''),
-                'description': info.get('longBusinessSummary', '')
+                'name': quote.get('longName', quote.get('shortName', '')),
+                'sector': quote.get('sector', ''),
+                'industry': quote.get('industry', ''),
+                'market_cap': quote.get('marketCap', 0),
+                'currency': quote.get('currency', ''),
+                'exchange': quote.get('fullExchangeName', ''),
+                'country': quote.get('marketState', ''),
+                'website': quote.get('website', ''),
+                'description': quote.get('longBusinessSummary', '')
             }
             
         except Exception as e:
             logger.warning(f"Could not fetch info for Yahoo Finance symbol {symbol}: {e}")
-            return {
-                'symbol': symbol,
-                'name': '',
-                'sector': '',
-                'industry': '',
-                'market_cap': 0,
-                'currency': '',
-                'exchange': '',
-                'country': '',
-                'website': '',
-                'description': ''
-            }
+            return self._get_default_symbol_info(symbol)
+    
+    def _get_default_symbol_info(self, symbol: str) -> Dict[str, Any]:
+        """Return default symbol info when API call fails"""
+        return {
+            'symbol': symbol,
+            'name': '',
+            'sector': '',
+            'industry': '',
+            'market_cap': 0,
+            'currency': '',
+            'exchange': '',
+            'country': '',
+            'website': '',
+            'description': ''
+        }
     
     def try_alternative_symbols(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
         """Try alternative symbols if the main symbol fails"""
