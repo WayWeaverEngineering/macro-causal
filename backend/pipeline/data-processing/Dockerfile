@@ -16,8 +16,5 @@ ENV PYTHONPATH=/opt/spark/work-dir
 ENV PYSPARK_PYTHON=/usr/bin/python3
 ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3
 
-# Make main.py executable
-RUN chmod +x /opt/spark/work-dir/main.py
-
 # Default command (will be overridden by spark-submit)
 CMD ["python", "/opt/spark/work-dir/main.py"]
