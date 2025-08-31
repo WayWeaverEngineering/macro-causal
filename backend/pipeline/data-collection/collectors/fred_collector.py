@@ -40,7 +40,7 @@ class FREDCollector(DataCollector):
         try:
             # Validate and fix date range
             if not start_date or not end_date:
-                start_date, end_date = self.get_default_date_range(18250)  # 50 years = 365 * 50 days
+                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             
@@ -55,8 +55,8 @@ class FREDCollector(DataCollector):
                 current_dt = datetime.strptime(today, '%Y-%m-%d')
                 
                 if start_dt > current_dt:
-                    self.logger.warning(f"Start date {start_date} is still in the future after validation, using 50 years ago")
-                    start_date = (current_dt - timedelta(days=18250)).strftime('%Y-%m-%d')
+                    self.logger.warning(f"Start date {start_date} is still in the future after validation, using 75 years ago")
+                    start_date = (current_dt - timedelta(days=27375)).strftime('%Y-%m-%d')
                 
                 if end_dt > current_dt:
                     self.logger.warning(f"End date {end_date} is still in the future after validation, using today")
@@ -64,7 +64,7 @@ class FREDCollector(DataCollector):
                     
             except ValueError as e:
                 self.logger.warning(f"Date parsing error: {e}, using default date range")
-                start_date, end_date = self.get_default_date_range(18250)  # 50 years = 365 * 50 days
+                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
             
             params = {
                 'series_id': series_id,
@@ -156,9 +156,9 @@ class FREDCollector(DataCollector):
                 self.logger.error("Set API_SECRETS_ARN environment variable and add API_KEY to the secret.")
                 raise ValueError(error_msg)
             
-            # Determine date range (last 50 years by default)
+            # Determine date range (last 75 years by default)
             if not end_date or not start_date:
-                start_date, end_date = self.get_default_date_range(18250)  # 50 years = 365 * 50 days
+                start_date, end_date = self.get_default_date_range(27375)  # 75 years = 365 * 75 days
             else:
                 start_date, end_date = self.validate_date_range(start_date, end_date)
             

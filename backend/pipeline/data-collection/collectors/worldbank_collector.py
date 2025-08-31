@@ -59,11 +59,11 @@ class WorldBankCollector(DataCollector):
                 except ValueError:
                     # If dates are not years, use current year
                     current_year = datetime.now(timezone.utc).year
-                    params['date'] = f"{current_year-50}:{current_year}"
+                    params['date'] = f"{current_year-75}:{current_year}"
             else:
-                # Default to last 50 years
+                # Default to last 75 years
                 current_year = datetime.now(timezone.utc).year
-                params['date'] = f"{current_year-50}:{current_year}"
+                params['date'] = f"{current_year-75}:{current_year}"
             
             # Use the enhanced HTTP request method from base collector
             response = self.make_http_request(url, params=params, timeout=30)
@@ -131,11 +131,11 @@ class WorldBankCollector(DataCollector):
             # Log collection start
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
-            # Determine date range (last 50 years by default)
+            # Determine date range (last 75 years by default)
             if not end_date:
                 end_date = datetime.now(timezone.utc).year
             if not start_date:
-                start_date = end_date - 50
+                start_date = end_date - 75
             
             self.results['start_date'] = start_date
             self.results['end_date'] = end_date
