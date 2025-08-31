@@ -49,7 +49,7 @@ YAHOO_SYMBOLS = [
     'ZC=F',     # Corn Futures
     'ZS=F',     # Soybean Futures
     
-    # Currencies
+    # Currencies (using alternative symbols that work better)
     'EURUSD=X', # Euro/US Dollar
     'GBPUSD=X', # British Pound/US Dollar
     'USDJPY=X', # US Dollar/Japanese Yen
@@ -57,13 +57,8 @@ YAHOO_SYMBOLS = [
     'USDCAD=X', # US Dollar/Canadian Dollar
 ]
 
-# Alternative symbols for problematic ones
-SYMBOL_ALTERNATIVES = {
-    'JNJ': ['JNJ', 'JNJ.N'],  # Try alternative symbols for JNJ
-}
-
 class YahooFinanceCollector(DataCollector):
-    """Yahoo Finance data collector using direct API calls"""
+    """Yahoo Finance data collector using direct API calls with workarounds for API restrictions"""
     
     def __init__(self):
         super().__init__(collector_name="YahooFinance")
@@ -131,49 +126,12 @@ class YahooFinanceCollector(DataCollector):
             # Get crumb for authentication
             crumb = self._get_yahoo_crumb(symbol)
             
-            # Construct URL and fetch data
-            url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp, crumb)
+            # Try multiple API endpoints for historical data
+            df = self._try_historical_data_endpoints(symbol, start_timestamp, end_timestamp, crumb)
             
-            response = self.session.get(url, timeout=15)
-            
-            # If we get a 401, try without crumb
-            if response.status_code == 401:
-                logger.warning(f"Yahoo Finance API returned 401 for {symbol}, retrying without crumb")
-                url = self._get_historical_data_url(symbol, start_timestamp, end_timestamp, "")
-                response = self.session.get(url, timeout=15)
-            
-            response.raise_for_status()
-            
-            # Parse CSV data
-            data = response.text.strip().split('\n')
-            if len(data) < 2:
-                logger.warning(f"No data returned for {symbol}")
+            if df.empty:
+                logger.warning(f"No data returned for {symbol} from any endpoint")
                 return pd.DataFrame()
-            
-            # Parse CSV headers and data
-            headers = data[0].split(',')
-            rows = []
-            for line in data[1:]:
-                if line.strip():
-                    values = line.split(',')
-                    if len(values) == len(headers):
-                        rows.append(dict(zip(headers, values)))
-            
-            if not rows:
-                logger.warning(f"No valid data rows for {symbol}")
-                return pd.DataFrame()
-            
-            # Convert to DataFrame
-            df = pd.DataFrame(rows)
-            
-            # Convert date column
-            df['Date'] = pd.to_datetime(df['Date'])
-            
-            # Convert numeric columns
-            numeric_columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-            for col in numeric_columns:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
             
             # Add metadata
             df['symbol'] = symbol
@@ -188,74 +146,164 @@ class YahooFinanceCollector(DataCollector):
                                       additional_info={"start_date": start_date, "end_date": end_date})
             raise
     
-    def _get_historical_data_url(self, symbol: str, start_timestamp: int, end_timestamp: int, crumb: str) -> str:
-        """Construct Yahoo Finance historical data URL"""
-        base_url = "https://query1.finance.yahoo.com/v8/finance/chart/"
-        params = f"?symbol={symbol}&period1={start_timestamp}&period2={end_timestamp}&interval=1d"
+    def _try_historical_data_endpoints(self, symbol: str, start_timestamp: int, end_timestamp: int, crumb: str) -> pd.DataFrame:
+        """Try multiple endpoints to get historical data"""
+        endpoints = [
+            # Primary endpoint - chart API
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?symbol={symbol}&period1={start_timestamp}&period2={end_timestamp}&interval=1d",
+            # Alternative endpoint
+            f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?symbol={symbol}&period1={start_timestamp}&period2={end_timestamp}&interval=1d",
+            # CSV download endpoint (most reliable)
+            f"https://query1.finance.yahoo.com/v7/finance/download/{symbol}?period1={start_timestamp}&period2={end_timestamp}&interval=1d&events=history"
+        ]
         
-        if crumb:
-            params += f"&crumb={crumb}"
+        for i, url in enumerate(endpoints):
+            try:
+                logger.info(f"Trying endpoint {i+1} for {symbol}")
+                
+                # Add crumb if available
+                if crumb and "crumb=" not in url:
+                    url += f"&crumb={crumb}"
+                
+                response = self.session.get(url, timeout=15)
+                
+                if response.status_code == 200:
+                    # Try to parse as CSV first (most common format)
+                    if 'download' in url or 'text/csv' in response.headers.get('content-type', ''):
+                        return self._parse_csv_data(response.text, symbol)
+                    else:
+                        # Try to parse as JSON
+                        return self._parse_json_data(response.json(), symbol)
+                
+                logger.warning(f"Endpoint {i+1} returned status {response.status_code} for {symbol}")
+                
+            except Exception as e:
+                logger.warning(f"Endpoint {i+1} failed for {symbol}: {e}")
+                continue
         
-        return base_url + symbol + params
+        return pd.DataFrame()
     
-    def fetch_symbol_info(self, symbol: str) -> Dict[str, Any]:
-        """Fetch basic information about a symbol"""
+    def _parse_csv_data(self, csv_text: str, symbol: str) -> pd.DataFrame:
+        """Parse CSV data from Yahoo Finance"""
         try:
-            # Try the quote API first
-            quote_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
-            response = self.session.get(quote_url, timeout=10)
+            lines = csv_text.strip().split('\n')
+            if len(lines) < 2:
+                return pd.DataFrame()
             
-            response.raise_for_status()
-            data = response.json()
+            # Parse headers and data
+            headers = lines[0].split(',')
+            rows = []
             
-            if 'quoteResponse' in data and 'result' in data['quoteResponse']:
-                result = data['quoteResponse']['result']
-                if result and len(result) > 0:
-                    quote = result[0]
-                    return {
-                        'symbol': quote.get('symbol', symbol),
-                        'shortName': quote.get('shortName', ''),
-                        'longName': quote.get('longName', ''),
-                        'market': quote.get('market', ''),
-                        'quoteType': quote.get('quoteType', ''),
-                        'currency': quote.get('currency', ''),
-                        'exchange': quote.get('exchange', ''),
-                        'marketState': quote.get('marketState', ''),
-                        'regularMarketPrice': quote.get('regularMarketPrice', 0),
-                        'regularMarketVolume': quote.get('regularMarketVolume', 0),
-                        'regularMarketTime': quote.get('regularMarketTime', 0)
-                    }
+            for line in lines[1:]:
+                if line.strip():
+                    values = line.split(',')
+                    if len(values) == len(headers):
+                        rows.append(dict(zip(headers, values)))
             
-            # If quote API fails, try alternative method
-            logger.warning(f"Quote API failed for {symbol}, trying alternative method")
-            return self._fetch_symbol_info_alternative(symbol)
+            if not rows:
+                return pd.DataFrame()
+            
+            df = pd.DataFrame(rows)
+            
+            # Convert date column
+            if 'Date' in df.columns:
+                df['Date'] = pd.to_datetime(df['Date'])
+            
+            # Convert numeric columns
+            numeric_columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            return df
             
         except Exception as e:
-            self.log_consolidated_error(f"Yahoo Finance symbol info fetch for {symbol}", e)
-            return {}
+            logger.warning(f"Failed to parse CSV data for {symbol}: {e}")
+            return pd.DataFrame()
     
-    def _fetch_symbol_info_alternative(self, symbol: str) -> Dict[str, Any]:
-        """Alternative method to fetch symbol information"""
+    def _parse_json_data(self, json_data: Dict, symbol: str) -> pd.DataFrame:
+        """Parse JSON data from Yahoo Finance chart API"""
         try:
-            # Try scraping from the quote page
+            if 'chart' not in json_data or 'result' not in json_data['chart'] or not json_data['chart']['result']:
+                return pd.DataFrame()
+            
+            result = json_data['chart']['result'][0]
+            timestamps = result.get('timestamp', [])
+            quote = result.get('indicators', {}).get('quote', [{}])[0]
+            
+            # Extract OHLCV data
+            opens = quote.get('open', [])
+            highs = quote.get('high', [])
+            lows = quote.get('low', [])
+            closes = quote.get('close', [])
+            volumes = quote.get('volume', [])
+            
+            # Create DataFrame
+            df_data = []
+            for i, timestamp in enumerate(timestamps):
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                df_data.append({
+                    'Date': dt,
+                    'Open': opens[i] if i < len(opens) and opens[i] is not None else None,
+                    'High': highs[i] if i < len(highs) and highs[i] is not None else None,
+                    'Low': lows[i] if i < len(lows) and lows[i] is not None else None,
+                    'Close': closes[i] if i < len(closes) and closes[i] is not None else None,
+                    'Volume': volumes[i] if i < len(volumes) and volumes[i] is not None else None
+                })
+            
+            return pd.DataFrame(df_data)
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse JSON data for {symbol}: {e}")
+            return pd.DataFrame()
+    
+    def get_basic_symbol_info(self, symbol: str) -> Dict[str, Any]:
+        """Get basic symbol information without using restricted APIs"""
+        try:
+            # Try to get basic info from the quote page
             quote_url = f"https://finance.yahoo.com/quote/{symbol}"
             response = self.session.get(quote_url, timeout=10)
             
-            response.raise_for_status()
+            if response.status_code == 200:
+                content = response.text
+                
+                # Extract title
+                title_start = content.find('<title>')
+                title_end = content.find('</title>')
+                title = ""
+                if title_start != -1 and title_end != -1:
+                    title = content[title_start + 7:title_end].strip()
+                
+                # Extract basic info from meta tags
+                currency = 'USD'  # Default
+                if 'currency' in content.lower():
+                    # Try to extract currency from meta tags
+                    currency_match = content.find('"currency":"')
+                    if currency_match != -1:
+                        currency_start = currency_match + 12
+                        currency_end = content.find('"', currency_start)
+                        if currency_end != -1:
+                            currency = content[currency_start:currency_end]
+                
+                return {
+                    'symbol': symbol,
+                    'shortName': title.replace(' (', ' - ').replace(')', '') if title else symbol,
+                    'longName': title if title else symbol,
+                    'market': 'Unknown',
+                    'quoteType': 'Unknown',
+                    'currency': currency,
+                    'exchange': 'Unknown',
+                    'marketState': 'Unknown',
+                    'regularMarketPrice': 0,
+                    'regularMarketVolume': 0,
+                    'regularMarketTime': 0
+                }
             
-            # Extract basic info from page title and meta tags
-            content = response.text
-            title_start = content.find('<title>')
-            title_end = content.find('</title>')
-            
-            title = ""
-            if title_start != -1 and title_end != -1:
-                title = content[title_start + 7:title_end].strip()
-            
+            # Return minimal info if page access fails
             return {
                 'symbol': symbol,
-                'shortName': title.replace(' (', ' - ').replace(')', '') if title else '',
-                'longName': title if title else '',
+                'shortName': symbol,
+                'longName': symbol,
                 'market': 'Unknown',
                 'quoteType': 'Unknown',
                 'currency': 'USD',
@@ -267,8 +315,20 @@ class YahooFinanceCollector(DataCollector):
             }
             
         except Exception as e:
-            self.log_consolidated_error(f"Yahoo Finance alternative symbol info for {symbol}", e)
-            return {}
+            logger.warning(f"Could not get basic info for {symbol}: {e}")
+            return {
+                'symbol': symbol,
+                'shortName': symbol,
+                'longName': symbol,
+                'market': 'Unknown',
+                'quoteType': 'Unknown',
+                'currency': 'USD',
+                'exchange': 'Unknown',
+                'marketState': 'Unknown',
+                'regularMarketPrice': 0,
+                'regularMarketVolume': 0,
+                'regularMarketTime': 0
+            }
     
     def collect(self, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Collect Yahoo Finance data with comprehensive error handling"""
@@ -316,8 +376,8 @@ class YahooFinanceCollector(DataCollector):
                             date_range=f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}"
                         )
                         
-                        # Fetch symbol information
-                        symbol_info = self.fetch_symbol_info(symbol)
+                        # Get basic symbol information (without using restricted APIs)
+                        symbol_info = self.get_basic_symbol_info(symbol)
                         
                         if symbol_info:
                             # Create DataFrame for symbol info
