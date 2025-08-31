@@ -46,19 +46,23 @@ def log_pipeline_summary(all_results: dict) -> None:
             continue
             
         if isinstance(result, dict) and 'error' not in result:
-            # Get summary from collector
-            if hasattr(result, 'get_collection_summary'):
-                summary = result.get_collection_summary()
-            else:
-                # Fallback for old format
-                summary = {
-                    'collector_name': collector_name,
-                    'total_processed': result.get('total_processed', 0),
-                    'total_success': result.get('total_success', 0),
-                    'total_failed': result.get('total_failed', 0),
-                    'total_records_collected': sum(r.get('records_count', 0) for r in result.get('success', [])),
-                    'success_rate_percent': 0
-                }
+            # Calculate summary from result dictionary
+            total_processed = result.get('total_processed', 0)
+            total_success = result.get('total_success', 0)
+            total_failed = result.get('total_failed', 0)
+            total_records_collected = sum(r.get('records_count', 0) for r in result.get('success', []))
+            
+            # Calculate success rate properly
+            success_rate_percent = (total_success / total_processed * 100) if total_processed > 0 else 0
+            
+            summary = {
+                'collector_name': result.get('collector_name', collector_name),
+                'total_processed': total_processed,
+                'total_success': total_success,
+                'total_failed': total_failed,
+                'total_records_collected': total_records_collected,
+                'success_rate_percent': round(success_rate_percent, 1)
+            }
             
             total_records += summary['total_records_collected']
             total_success += summary['total_success']
