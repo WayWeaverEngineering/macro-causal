@@ -55,15 +55,15 @@ class FREDCollector(DataCollector):
                 current_dt = datetime.strptime(today, '%Y-%m-%d')
                 
                 if start_dt > current_dt:
-                    logger.warning(f"Start date {start_date} is still in the future after validation, using 30 days ago")
+                    self.logger.warning(f"Start date {start_date} is still in the future after validation, using 30 days ago")
                     start_date = (current_dt - timedelta(days=30)).strftime('%Y-%m-%d')
                 
                 if end_dt > current_dt:
-                    logger.warning(f"End date {end_date} is still in the future after validation, using today")
+                    self.logger.warning(f"End date {end_date} is still in the future after validation, using today")
                     end_date = today
                     
             except ValueError as e:
-                logger.warning(f"Date parsing error: {e}, using default date range")
+                self.logger.warning(f"Date parsing error: {e}, using default date range")
                 start_date, end_date = self.get_default_date_range(30)
             
             params = {
@@ -84,7 +84,7 @@ class FREDCollector(DataCollector):
             
             # If we get a 400 error, it might be due to invalid dates, try with a more conservative date range
             if response.status_code == 400:
-                logger.warning(f"FRED API returned 400 for {series_id}, trying with conservative date range")
+                self.logger.warning(f"FRED API returned 400 for {series_id}, trying with conservative date range")
                 # Try with last 7 days instead
                 conservative_start, conservative_end = self.get_default_date_range(7)
                 params['observation_start'] = conservative_start
@@ -104,7 +104,7 @@ class FREDCollector(DataCollector):
             observations = raw_data.get('observations', [])
             
             if not observations:
-                logger.warning(f"No observations found for FRED series {series_id}")
+                self.logger.warning(f"No observations found for FRED series {series_id}")
                 return pd.DataFrame()
             
             # Extract data points
@@ -151,9 +151,9 @@ class FREDCollector(DataCollector):
             api_key = self.get_api_key('API_KEY')
             if not api_key:
                 error_msg = "FRED API key not found. API key is required for data collection."
-                logger.error(error_msg)
-                logger.error("Please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
-                logger.error("Set API_SECRETS_ARN environment variable and add API_KEY to the secret.")
+                self.logger.error(error_msg)
+                self.logger.error("Please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
+                self.logger.error("Set API_SECRETS_ARN environment variable and add API_KEY to the secret.")
                 raise ValueError(error_msg)
             
             # Determine date range (last 30 days by default)

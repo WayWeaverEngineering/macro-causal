@@ -91,11 +91,11 @@ class YahooFinanceCollector(DataCollector):
                 if crumb_end != -1:
                     return content[crumb_start:crumb_end]
             
-            logger.warning(f"Could not extract crumb for {symbol}, proceeding without authentication")
+            self.logger.warning(f"Could not extract crumb for {symbol}, proceeding without authentication")
             return ""
             
         except Exception as e:
-            logger.warning(f"Could not get crumb for {symbol}: {e}, proceeding without authentication")
+            self.logger.warning(f"Could not get crumb for {symbol}: {e}, proceeding without authentication")
             return ""
     
     def _date_to_timestamp(self, date_str: str) -> int:
@@ -128,7 +128,7 @@ class YahooFinanceCollector(DataCollector):
             df = self._try_historical_data_endpoints(symbol, start_timestamp, end_timestamp, crumb)
             
             if df.empty:
-                logger.warning(f"No data returned for {symbol} from any endpoint")
+                self.logger.warning(f"No data returned for {symbol} from any endpoint")
                 return pd.DataFrame()
             
             # Add metadata
@@ -170,10 +170,10 @@ class YahooFinanceCollector(DataCollector):
                         # Try to parse as JSON
                         return self._parse_json_data(response.json(), symbol)
                 
-                logger.warning(f"Endpoint {i+1} returned status {response.status_code} for {symbol}")
+                self.logger.warning(f"Endpoint {i+1} returned status {response.status_code} for {symbol}")
                 
             except Exception as e:
-                logger.warning(f"Endpoint {i+1} failed for {symbol}: {e}")
+                self.logger.warning(f"Endpoint {i+1} failed for {symbol}: {e}")
                 continue
         
         return pd.DataFrame()
@@ -213,7 +213,7 @@ class YahooFinanceCollector(DataCollector):
             return df
             
         except Exception as e:
-            logger.warning(f"Failed to parse CSV data for {symbol}: {e}")
+            self.logger.warning(f"Failed to parse CSV data for {symbol}: {e}")
             return pd.DataFrame()
     
     def _parse_json_data(self, json_data: Dict, symbol: str) -> pd.DataFrame:
@@ -249,7 +249,7 @@ class YahooFinanceCollector(DataCollector):
             return pd.DataFrame(df_data)
             
         except Exception as e:
-            logger.warning(f"Failed to parse JSON data for {symbol}: {e}")
+            self.logger.warning(f"Failed to parse JSON data for {symbol}: {e}")
             return pd.DataFrame()
     
     def get_basic_symbol_info(self, symbol: str) -> Dict[str, Any]:
@@ -310,7 +310,7 @@ class YahooFinanceCollector(DataCollector):
             }
             
         except Exception as e:
-            logger.warning(f"Could not get basic info for {symbol}: {e}")
+            self.logger.warning(f"Could not get basic info for {symbol}: {e}")
             return {
                 'symbol': symbol,
                 'shortName': symbol,

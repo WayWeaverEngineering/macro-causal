@@ -80,14 +80,14 @@ class WorldBankCollector(DataCollector):
         """Process raw World Bank data into a structured DataFrame"""
         try:
             if not raw_data or len(raw_data) < 2:
-                logger.warning(f"No data found for World Bank {country_code}/{indicator}")
+                self.logger.warning(f"No data found for World Bank {country_code}/{indicator}")
                 return pd.DataFrame()
             
             # World Bank API returns metadata in first element, data in second element
             data_points = raw_data[1] if len(raw_data) > 1 else []
             
             if not data_points:
-                logger.warning(f"No data points found for World Bank {country_code}/{indicator}")
+                self.logger.warning(f"No data points found for World Bank {country_code}/{indicator}")
                 return pd.DataFrame()
             
             # Extract data points

@@ -41,6 +41,7 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0, backoff_factor: f
                     last_exception = e
                     if attempt < max_retries - 1:
                         wait_time = delay * (backoff_factor ** attempt)
+                        # Note: This decorator uses the global logger since it's not part of the class
                         logger.warning(f"Attempt {attempt + 1} failed for {func.__name__}: {e}. Retrying in {wait_time:.2f}s...")
                         time.sleep(wait_time)
                     else:
@@ -62,6 +63,7 @@ def log_api_call(func):
             return result
         except Exception as e:
             duration = time.time() - start_time
+            # Note: This decorator uses the global logger since it's not part of the class
             logger.error(f"API Call Failed: {func_name} - Duration: {duration:.2f}s - Error: {e}")
             raise
     return wrapper
@@ -71,6 +73,9 @@ class DataCollector:
     
     def __init__(self, collector_name: str = "Unknown"):
         self.collector_name = collector_name
+        # Create a logger specific to this collector instance
+        self.logger = logging.getLogger(f"collectors.{collector_name.lower()}")
+        
         self.results = {
             'success': [],
             'failed': [],
@@ -82,7 +87,7 @@ class DataCollector:
             'total_success': 0,
             'total_failed': 0
         }
-        logger.info(f"Initialized {collector_name} collector")
+        self.logger.info(f"Initialized {collector_name} collector")
     
     def log_consolidated_error(self, context: str, error: Exception, response: Optional[requests.Response] = None, 
                               additional_info: Dict[str, Any] = None) -> None:
@@ -99,7 +104,7 @@ class DataCollector:
                 if value is not None:
                     error_parts.append(f"{key}: {value}")
         
-        logger.error(" | ".join(error_parts))
+        self.logger.error(" | ".join(error_parts))
     
     def validate_date_range(self, start_date: str, end_date: str) -> tuple[str, str]:
         """Validate and fix date ranges to ensure they're valid"""
@@ -112,30 +117,30 @@ class DataCollector:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             
             if start_dt > now:
-                logger.warning(f"Start date {start_date} is in the future, adjusting to 30 days ago")
+                self.logger.warning(f"Start date {start_date} is in the future, adjusting to 30 days ago")
                 start_dt = now - timedelta(days=30)
                 start_date = start_dt.strftime('%Y-%m-%d')
             
             if end_dt > now:
-                logger.warning(f"End date {end_date} is in the future, adjusting to today")
+                self.logger.warning(f"End date {end_date} is in the future, adjusting to today")
                 end_dt = now
                 end_date = end_dt.strftime('%Y-%m-%d')
             
             # Ensure start_date <= end_date
             if start_dt > end_dt:
-                logger.warning(f"Start date {start_date} is after end date {end_date}, swapping")
+                self.logger.warning(f"Start date {start_date} is after end date {end_date}, swapping")
                 start_date, end_date = end_date, start_date
             
-            logger.info(f"Validated date range: {start_date} to {end_date}")
+            self.logger.info(f"Validated date range: {start_date} to {end_date}")
             return start_date, end_date
             
         except ValueError as e:
-            logger.error(f"Invalid date format: {e}")
+            self.logger.error(f"Invalid date format: {e}")
             # Return default date range
             now = datetime.now(timezone.utc)
             end_date = now.strftime('%Y-%m-%d')
             start_date = (now - timedelta(days=30)).strftime('%Y-%m-%d')
-            logger.info(f"Using default date range: {start_date} to {end_date}")
+            self.logger.info(f"Using default date range: {start_date} to {end_date}")
             return start_date, end_date
     
     def get_default_date_range(self, days_back: int = 30) -> tuple[str, str]:
@@ -149,7 +154,7 @@ class DataCollector:
     def get_api_key(self, key_name: str) -> Optional[str]:
         """Retrieve API key from Secrets Manager with retry logic"""
         if not API_SECRETS_ARN:
-            logger.warning(f"API_SECRETS_ARN environment variable not set. Cannot retrieve API key '{key_name}'")
+            self.logger.warning(f"API_SECRETS_ARN environment variable not set. Cannot retrieve API key '{key_name}'")
             return None
             
         try:
@@ -158,7 +163,7 @@ class DataCollector:
             api_key = secrets.get(key_name, '')
             
             if not api_key:
-                logger.warning(f"API key '{key_name}' not found in Secrets Manager secret")
+                self.logger.warning(f"API key '{key_name}' not found in Secrets Manager secret")
                 
             return api_key
             
@@ -258,7 +263,7 @@ class DataCollector:
         self.results['total_failed'] += 1
         self.results['total_processed'] += 1
         
-        logger.error(f"Failed to process {item_id}: {error}")
+        self.logger.error(f"Failed to process {item_id}: {error}")
     
     def validate_environment(self) -> bool:
         """Validate that required environment variables are set"""
@@ -266,7 +271,7 @@ class DataCollector:
         missing_vars = [var for var in required_vars if not os.environ.get(var)]
         
         if missing_vars:
-            logger.error(f"Missing required environment variables: {missing_vars}")
+            self.logger.error(f"Missing required environment variables: {missing_vars}")
             return False
         
         return True
@@ -274,7 +279,7 @@ class DataCollector:
     def log_collection_start(self, **kwargs) -> None:
         """Log the start of data collection"""
         self.results['start_time'] = datetime.now(timezone.utc).isoformat()
-        logger.info(f"Starting {self.collector_name} data collection")
+        self.logger.info(f"Starting {self.collector_name} data collection")
     
     def log_collection_end(self) -> None:
         """Log the end of data collection with comprehensive summary"""
@@ -285,35 +290,35 @@ class DataCollector:
         success_rate = (self.results['total_success'] / self.results['total_processed'] * 100) if self.results['total_processed'] > 0 else 0
         
         # Log basic completion info
-        logger.info(f"Completed {self.collector_name} data collection: {self.results['total_success']} successful, {self.results['total_failed']} failed")
+        self.logger.info(f"Completed {self.collector_name} data collection: {self.results['total_success']} successful, {self.results['total_failed']} failed")
         
         # Log detailed summary
-        logger.info(f"{self.collector_name} Collection Summary:")
-        logger.info(f"   • Total items processed: {self.results['total_processed']}")
-        logger.info(f"   • Successful collections: {self.results['total_success']}")
-        logger.info(f"   • Failed collections: {self.results['total_failed']}")
-        logger.info(f"   • Success rate: {success_rate:.1f}%")
-        logger.info(f"   • Total records collected: {total_records:,}")
+        self.logger.info(f"{self.collector_name} Collection Summary:")
+        self.logger.info(f"   • Total items processed: {self.results['total_processed']}")
+        self.logger.info(f"   • Successful collections: {self.results['total_success']}")
+        self.logger.info(f"   • Failed collections: {self.results['total_failed']}")
+        self.logger.info(f"   • Success rate: {success_rate:.1f}%")
+        self.logger.info(f"   • Total records collected: {total_records:,}")
         
         # Log successful items with record counts
         if self.results['success']:
-            logger.info(f"   • Successful items:")
+            self.logger.info(f"   • Successful items:")
             for result in self.results['success']:
                 item_id = result.get('item_id', 'Unknown')
                 records = result.get('records_count', 0)
                 date_range = result.get('date_range', '')
                 if date_range:
-                    logger.info(f"     - {item_id}: {records:,} records ({date_range})")
+                    self.logger.info(f"     - {item_id}: {records:,} records ({date_range})")
                 else:
-                    logger.info(f"     - {item_id}: {records:,} records")
+                    self.logger.info(f"     - {item_id}: {records:,} records")
         
         # Log failed items
         if self.results['failed']:
-            logger.info(f"   • Failed items:")
+            self.logger.info(f"   • Failed items:")
             for result in self.results['failed']:
                 item_id = result.get('item_id', 'Unknown')
                 error = result.get('error', 'Unknown error')
-                logger.info(f"     - {item_id}: {error}")
+                self.logger.info(f"     - {item_id}: {error}")
 
     def get_collection_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of the collection results"""
