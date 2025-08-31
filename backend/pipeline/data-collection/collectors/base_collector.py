@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -20,7 +20,6 @@ s3_client = boto3.client('s3')
 secrets_client = boto3.client('secretsmanager')
 
 # Environment variables
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
 BRONZE_BUCKET = os.environ.get('BRONZE_BUCKET')
 API_SECRETS_ARN = os.environ.get('API_SECRETS_ARN')
 
@@ -34,15 +33,27 @@ class DataCollector:
             'collection_timestamp': datetime.utcnow().isoformat()
         }
     
-    def get_api_key(self, key_name: str) -> str:
+    def get_api_key(self, key_name: str) -> Optional[str]:
         """Retrieve API key from Secrets Manager"""
+        if not API_SECRETS_ARN:
+            logger.warning(f"API_SECRETS_ARN environment variable not set. Cannot retrieve API key '{key_name}'")
+            return None
+            
         try:
             response = secrets_client.get_secret_value(SecretId=API_SECRETS_ARN)
             secrets = json.loads(response['SecretString'])
-            return secrets.get(key_name, '')
+            api_key = secrets.get(key_name, '')
+            
+            if api_key:
+                logger.info(f"Successfully retrieved API key '{key_name}' from Secrets Manager")
+            else:
+                logger.warning(f"API key '{key_name}' not found in Secrets Manager secret")
+                
+            return api_key
+            
         except Exception as e:
-            logger.warning(f"API key {key_name} not found in Secrets Manager: {e}")
-            return ''
+            logger.warning(f"Error retrieving API key '{key_name}' from Secrets Manager: {e}")
+            return None
     
     def save_to_s3(self, df: pd.DataFrame, s3_path: str, bucket: str) -> str:
         """Save DataFrame to S3 as JSON"""

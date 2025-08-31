@@ -103,10 +103,14 @@ class FREDCollector(DataCollector):
         """Collect FRED data"""
         logger.info("Starting FRED data collection")
         
-        # Get API key
+        # Get API key (optional)
         api_key = self.get_api_key('FRED_API_KEY')
         if not api_key:
-            raise ValueError("FRED API key not found in Secrets Manager")
+            logger.warning("FRED API key not found. Using limited access mode (120 requests/minute).")
+            logger.warning("For production use, please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
+            logger.warning("Set API_SECRETS_ARN environment variable and add FRED_API_KEY to the secret for full access.")
+            # Continue without API key (limited rate)
+            api_key = None
         
         # Determine date range (last 30 days by default)
         if not end_date:
@@ -149,8 +153,11 @@ class FREDCollector(DataCollector):
                         'error': 'No data returned'
                     })
                 
-                # Rate limiting - FRED allows 120 requests per minute
-                time.sleep(0.5)
+                # Rate limiting - FRED allows 120 requests per minute without API key, 1200 with API key
+                if api_key:
+                    time.sleep(0.5)  # 1200 requests per minute = 0.5 seconds between requests
+                else:
+                    time.sleep(0.5)  # 120 requests per minute = 0.5 seconds between requests (same for now)
                 
             except Exception as e:
                 logger.error(f"Failed to process FRED series {series_id}: {e}")

@@ -18,6 +18,8 @@ export class MLPipelineStack extends Stack {
       stageName: 'data-collection',
       environment: {
         BRONZE_BUCKET: props.dataLakeStack.bronzeBucket.bucketName,
+        ENVIRONMENT: 'prod'
+        // Note: API_SECRETS_ARN is optional and can be added later if needed for FRED API key
       }
     });
 
