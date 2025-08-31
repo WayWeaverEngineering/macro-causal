@@ -1,7 +1,7 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
-import { EcsStageConstruct } from '../constructs/EcsStageConstruct';
+import { EcsFargateServiceConstruct } from '../constructs/EcsFargateServiceConstruct';
 import { DataLakeStack } from './DataLakeStack';
 import { AwsConfig } from '../configs/AwsConfig';
 import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
@@ -19,9 +19,12 @@ export class MLPipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: MLPipelineStackProps) {
     super(scope, id, props);
 
-    const dataCollectionStage = new EcsStageConstruct(
-      this, DefaultIdBuilder.build('data-collection-stage'), {
-      stageName: 'data-collection',
+    const dataCollectionStageName = 'data-collection';
+    const dataCollectionEcsId = DefaultIdBuilder.build(`${dataCollectionStageName}-ecs-service`);
+    const dataCollectionEcs = new EcsFargateServiceConstruct(this, dataCollectionEcsId, {
+      name: dataCollectionStageName,
+      // IMPORTANT: the image path is relative to cdk.out
+      imagePath: `../pipeline/${dataCollectionStageName}`,
       environment: {
         BRONZE_BUCKET: props.dataLakeStack.bronzeBucket.bucketName,
         API_SECRETS_ARN: AwsConfig.FRED_API_SECRET_ARN
@@ -38,17 +41,17 @@ export class MLPipelineStack extends Stack {
     })
 
     // Add secret access statement to data collection stage task role
-    dataCollectionStage.service.taskDefinition.taskRole.addToPrincipalPolicy(secretAccessStatement);
+    dataCollectionEcs.service.taskDefinition.taskRole.addToPrincipalPolicy(secretAccessStatement);
 
     // Enable data collection stage to write raw data to bronze bucket
-    props.dataLakeStack.bronzeBucket.grantReadWrite(dataCollectionStage.service.taskDefinition.taskRole);
+    props.dataLakeStack.bronzeBucket.grantReadWrite(dataCollectionEcs.service.taskDefinition.taskRole);
 
     // Create Step Functions task for data collection stage
-    const dataCollectionTaskId = DefaultIdBuilder.build('data-collection-task');
+    const dataCollectionTaskId = DefaultIdBuilder.build(`${dataCollectionStageName}-task`);
     const dataCollectionTask = new tasks.EcsRunTask(this, dataCollectionTaskId, {
-      stateName: "DataCollection",
-      cluster: dataCollectionStage.service.cluster,
-      taskDefinition: dataCollectionStage.service.taskDefinition,
+      stateName: dataCollectionStageName,
+      cluster: dataCollectionEcs.service.cluster,
+      taskDefinition: dataCollectionEcs.service.taskDefinition,
       integrationPattern: sfn.IntegrationPattern.RUN_JOB,
       
       // Configure task parameters
@@ -58,7 +61,7 @@ export class MLPipelineStack extends Stack {
       
       // Add container overrides with execution context
       containerOverrides: [{
-        containerDefinition: dataCollectionStage.service.taskDefinition.defaultContainer!,
+        containerDefinition: dataCollectionEcs.service.taskDefinition.defaultContainer!,
         environment: [
           { name: 'EXECUTION_MODE', value: 'step-functions' },
           { name: 'PIPELINE_EXECUTION_ID', value: sfn.JsonPath.stringAt('$$.Execution.Id') },
@@ -74,16 +77,16 @@ export class MLPipelineStack extends Stack {
     });
 
     // Add validation for data collection success/failure
-    const validateDataCollectionId = DefaultIdBuilder.build('validate-data-collection');
+    const validateDataCollectionId = DefaultIdBuilder.build(`validate-${dataCollectionStageName}`);
     const validateDataCollection = new sfn
       .Choice(this, validateDataCollectionId, {
-        stateName: "ValidateDataCollection"
+        stateName: `validate-${dataCollectionStageName}`
       })
       .when(sfn.Condition.stringEquals('$.dataCollectionResult.status', 'SUCCESS'), 
-        new sfn.Succeed(this, 'DataCollectionSuccess', {
+        new sfn.Succeed(this, `${dataCollectionStageName}-success`, {
           comment: 'Data collection completed successfully'
         }))
-      .otherwise(new sfn.Fail(this, 'DataCollectionFailed', {
+      .otherwise(new sfn.Fail(this, `${dataCollectionStageName}-failed`, {
         error: 'DataCollectionFailed',
         cause: 'Data collection stage failed',
         comment: 'Data collection stage encountered an error'
