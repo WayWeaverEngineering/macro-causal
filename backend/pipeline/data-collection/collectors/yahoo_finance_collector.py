@@ -5,7 +5,7 @@ Collects financial market data from Yahoo Finance
 """
 
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import time
 import yfinance as yf
@@ -70,9 +70,9 @@ class YahooFinanceCollector(DataCollector):
             
             # Determine date range
             if not start_date:
-                start_date = (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d')
+                start_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d')
             if not end_date:
-                end_date = datetime.utcnow().strftime('%Y-%m-%d')
+                end_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
             
             # Fetch historical data
             df = ticker.history(start=start_date, end=end_date, interval='1d')
@@ -99,7 +99,7 @@ class YahooFinanceCollector(DataCollector):
             # Add metadata
             df['symbol'] = symbol
             df['source'] = 'YahooFinance'
-            df['collection_timestamp'] = datetime.utcnow().isoformat()
+            df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
             return df
             
@@ -147,9 +147,9 @@ class YahooFinanceCollector(DataCollector):
         
         # Determine date range (last 30 days by default)
         if not end_date:
-            end_date = datetime.utcnow().strftime('%Y-%m-%d')
+            end_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         if not start_date:
-            start_date = (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d')
+            start_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d')
         
         self.results['start_date'] = start_date
         self.results['end_date'] = end_date
@@ -165,9 +165,9 @@ class YahooFinanceCollector(DataCollector):
                 
                 if not df.empty:
                     # Create S3 paths
-                    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                    price_s3_path = f"raw/yahoo_finance/{symbol}/price/{timestamp}_{symbol}_price.json"
-                    info_s3_path = f"raw/yahoo_finance/{symbol}/info/{timestamp}_{symbol}_info.json"
+                    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+                    price_s3_path = f"raw/yahoo_finance/{symbol}/price/{timestamp}_{symbol}_price.parquet"
+                    info_s3_path = f"raw/yahoo_finance/{symbol}/info/{timestamp}_{symbol}_info.parquet"
                     
                     # Save price data to S3
                     price_s3_key = self.save_to_s3(df, price_s3_path, BRONZE_BUCKET)

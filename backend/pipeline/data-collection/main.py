@@ -9,7 +9,7 @@ Consolidates data collection from multiple sources:
 
 import json
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import logging
 import sys
@@ -45,7 +45,7 @@ def main():
         
         # Collect data from all sources
         all_results = {
-            'pipeline_start_time': datetime.utcnow().isoformat(),
+            'pipeline_start_time': datetime.now(timezone.utc).isoformat(),
             'fred': None,
             'worldbank': None,
             'yahoo_finance': None,
@@ -81,10 +81,10 @@ def main():
             all_results['overall_status'] = 'partial_failure'
         
         # Record completion time
-        all_results['pipeline_end_time'] = datetime.utcnow().isoformat()
+        all_results['pipeline_end_time'] = datetime.now(timezone.utc).isoformat()
         
         # Save overall results to S3
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         results_s3_path = f"pipeline_results/data_collection/{timestamp}_pipeline_results.json"
         
         s3_client.put_object(

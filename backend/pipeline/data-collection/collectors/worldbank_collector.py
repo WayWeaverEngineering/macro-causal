@@ -6,7 +6,7 @@ Collects economic indicators from World Bank API
 
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import time
 from typing import Dict, List, Any
@@ -47,7 +47,7 @@ class WorldBankCollector(DataCollector):
             }
             
             if start_date:
-                params['date'] = f"{start_date}:{end_date or datetime.utcnow().year}"
+                params['date'] = f"{start_date}:{end_date or datetime.now(timezone.utc).year}"
             
             logger.info(f"Fetching World Bank data for country: {country_code}, indicator: {indicator}")
             response = requests.get(url, params=params, timeout=30)
@@ -105,7 +105,7 @@ class WorldBankCollector(DataCollector):
             
             # Add metadata
             df['source'] = 'WorldBank'
-            df['collection_timestamp'] = datetime.utcnow().isoformat()
+            df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
             return df
             
@@ -119,7 +119,7 @@ class WorldBankCollector(DataCollector):
         
         # Determine date range (last 10 years by default)
         if not end_date:
-            end_date = datetime.utcnow().year
+            end_date = datetime.now(timezone.utc).year
         if not start_date:
             start_date = end_date - 10
         
@@ -144,8 +144,8 @@ class WorldBankCollector(DataCollector):
                     
                     if not df.empty:
                         # Create S3 path
-                        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                        s3_path = f"raw/worldbank/{country_code}/{indicator}/{timestamp}_{country_code}_{indicator}.json"
+                        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+                        s3_path = f"raw/worldbank/{country_code}/{indicator}/{timestamp}_{country_code}_{indicator}.parquet"
                         
                         # Save to S3
                         s3_key = self.save_to_s3(df, s3_path, BRONZE_BUCKET)

@@ -7,10 +7,11 @@ Provides common functionality for all data collectors
 import json
 import boto3
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import logging
 from typing import Dict, Any, Optional
+import io
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class DataCollector:
         self.results = {
             'success': [],
             'failed': [],
-            'collection_timestamp': datetime.utcnow().isoformat()
+            'collection_timestamp': datetime.now(timezone.utc).isoformat()
         }
     
     def get_api_key(self, key_name: str) -> Optional[str]:
@@ -56,21 +57,23 @@ class DataCollector:
             return None
     
     def save_to_s3(self, df: pd.DataFrame, s3_path: str, bucket: str) -> str:
-        """Save DataFrame to S3 as JSON"""
+        """Save DataFrame to S3 as parquet"""
         try:
             if df.empty:
                 logger.warning(f"No data to save to {s3_path}")
                 return ""
             
-            # Convert DataFrame to JSON
-            json_data = df.to_json(orient='records', date_format='iso')
+            # Convert DataFrame to parquet bytes
+            parquet_buffer = io.BytesIO()
+            df.to_parquet(parquet_buffer, index=False)
+            parquet_buffer.seek(0)
             
             # Upload to S3
             s3_client.put_object(
                 Bucket=bucket,
                 Key=s3_path,
-                Body=json_data,
-                ContentType='application/json'
+                Body=parquet_buffer.getvalue(),
+                ContentType='application/octet-stream'
             )
             
             logger.info(f"Successfully saved {len(df)} records to s3://{bucket}/{s3_path}")

@@ -6,7 +6,7 @@ Collects economic data from Federal Reserve Economic Data (FRED) API
 
 import requests
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import time
 from typing import Dict, List, Any
@@ -91,7 +91,7 @@ class FREDCollector(DataCollector):
             # Add metadata
             df['series_id'] = series_id
             df['source'] = 'FRED'
-            df['collection_timestamp'] = datetime.utcnow().isoformat()
+            df['collection_timestamp'] = datetime.now(timezone.utc).isoformat()
             
             return df
             
@@ -114,9 +114,9 @@ class FREDCollector(DataCollector):
         
         # Determine date range (last 30 days by default)
         if not end_date:
-            end_date = datetime.utcnow().strftime('%Y-%m-%d')
+            end_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         if not start_date:
-            start_date = (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d')
+            start_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d')
         
         self.results['start_date'] = start_date
         self.results['end_date'] = end_date
@@ -135,8 +135,8 @@ class FREDCollector(DataCollector):
                 
                 if not df.empty:
                     # Create S3 path
-                    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-                    s3_path = f"raw/fred/{series_id}/{timestamp}_{series_id}.json"
+                    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+                    s3_path = f"raw/fred/{series_id}/{timestamp}_{series_id}.parquet"
                     
                     # Save to S3
                     s3_key = self.save_to_s3(df, s3_path, BRONZE_BUCKET)
