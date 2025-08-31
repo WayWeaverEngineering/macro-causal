@@ -148,12 +148,12 @@ class FREDCollector(DataCollector):
             self.log_collection_start(start_date=start_date, end_date=end_date)
             
             # Get API key (required)
-            api_key = self.get_api_key('FRED_API_KEY')
+            api_key = self.get_api_key('API_KEY')
             if not api_key:
                 error_msg = "FRED API key not found. API key is required for data collection."
                 logger.error(error_msg)
                 logger.error("Please obtain a free FRED API key from https://fred.stlouisfed.org/docs/api/api_key.html")
-                logger.error("Set API_SECRETS_ARN environment variable and add FRED_API_KEY to the secret.")
+                logger.error("Set API_SECRETS_ARN environment variable and add API_KEY to the secret.")
                 raise ValueError(error_msg)
             
             # Determine date range (last 30 days by default)
