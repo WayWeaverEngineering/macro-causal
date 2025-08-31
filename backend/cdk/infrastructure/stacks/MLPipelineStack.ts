@@ -5,9 +5,11 @@ import { DataLakeStack } from './DataLakeStack';
 import { DataCollectionStage } from '../constructs/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { DataProcessingStage } from '../constructs/DataProcessingStage';
+import { AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
 
 export interface MLPipelineStackProps extends StackProps {
   dataLakeStack: DataLakeStack;
+  lambdaLayersStack: PrebuiltLambdaLayersStack;
 }
 
 export class MLPipelineStack extends Stack {
@@ -21,9 +23,14 @@ export class MLPipelineStack extends Stack {
       dataLakeStack: props.dataLakeStack
     });
 
+    const commonUtilsLambdaLayer = props.lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
+    const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
+
     const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
     const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
-      dataLakeStack: props.dataLakeStack
+      dataLakeStack: props.dataLakeStack,
+      commonUtilsLambdaLayer,
+      emrServerlessLambdaLayer
     });
 
 

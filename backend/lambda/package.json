@@ -1,0 +1,26 @@
+{
+  "name": "macro-causal-lambda",
+  "version": "1.0.0",
+  "main": "lambda/index.js",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "watch": "tsc --project tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.149",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "22.5.4",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.6.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-emr-serverless": "3.879.0",
+    "@wayweaver/aws-secrets": "3.3.0",
+    "@wayweaver/lambda-utils": "4.1.0",
+    "axios": "^1.7.9",
+    "jsdom": "^24.0.0"
+  },
+  "overrides": {
+    "uuid": "^10.0.0"
+  }
+}

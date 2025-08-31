@@ -3,8 +3,9 @@ import { Construct } from "constructs";
 import { DefaultIdBuilder } from "../../utils/Naming";
 import {
   LayerArns,
+  DEFAULT_REGION,
   AWS_ADMIN_ACCOUNT_ID,
-  DEFAULT_REGION
+  PrebuiltLambdaLayersStack,
 } from "@wayweaver/ariadne";
 import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionStack";
 import { DataLakeStack } from "../stacks/DataLakeStack";
@@ -28,9 +29,15 @@ export class DeploymentStage extends Stage {
       region: this.region ?? DEFAULT_REGION,
     });
 
+    const lambdaLayersStackId = DefaultIdBuilder.build('lambda-layers-stack')
+    const lambdaLayersStack = new PrebuiltLambdaLayersStack(this, lambdaLayersStackId, {
+      arns: props.prebuiltLambdaLayerArns
+    })
+
     const mlPipelineStackId = DefaultIdBuilder.build('ml-pipeline-stack');
     const mlPipelineStack = new MLPipelineStack(this, mlPipelineStackId, {
-      dataLakeStack
+      dataLakeStack,
+      lambdaLayersStack
     });
 
     mlPipelineStack.addDependency(dataLakeStack);
