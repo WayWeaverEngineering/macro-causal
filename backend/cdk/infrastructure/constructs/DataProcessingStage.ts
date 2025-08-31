@@ -140,16 +140,19 @@ export class DataProcessingStage extends Construct {
       comment: 'Data processing stage encountered an error'
     });
 
+    // Create a choice state to check job status
+    const jobStatusChoice = new sfn.Choice(this, DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete`))
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
+      .otherwise(waitState);
+
+    // Connect wait state back to check status task
+    waitState.next(checkStatusTask).next(jobStatusChoice);
+
     // Build the job monitoring workflow
     const dataProcessingTask = startJobTask
       .next(checkStatusTask)
-      .next(new sfn.Choice(this, DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete`))
-        .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
-        .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-        .otherwise(waitState.next(checkStatusTask).next(new sfn.Choice(this, DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-2`))
-          .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
-          .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-          .otherwise(waitState.next(checkStatusTask).next(successState))))); // Fallback to success after retries
+      .next(jobStatusChoice);
 
     this.workflow = sfn.Chain.start(dataProcessingTask);
   }
