@@ -20,11 +20,9 @@ export class EmrClusterConstruct extends Construct {
     super(scope, id);
 
     // Create IAM role for EMR Serverless execution
-    this.executionRole = new iam.Role(this, DefaultIdBuilder.build('emr-serverless-execution-role'), {
+    const emrServerlessExecutionRoleId = DefaultIdBuilder.build('emr-serverless-execution-role');
+    this.executionRole = new iam.Role(this, emrServerlessExecutionRoleId, {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName("aws-service-role/AmazonEMRServerlessServiceRolePolicy")
-      ]
     });
 
     // Grant S3 access to EMR Serverless
