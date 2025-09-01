@@ -16,7 +16,7 @@ export const Header = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
           <Analytics sx={{ fontSize: 40, color: '#90caf9', mr: 2, display: { xs: 'none', sm: 'inline-flex' } }} />
           <Typography variant="h4" component="h1" sx={{ color: '#fff', fontWeight: 600 }}>
-            Macro AI Analyst
+            Macro Causal Inference AI Analyst
           </Typography>
         </Box>
         <Typography variant="body1" sx={{ color: '#aaa', maxWidth: 600, mx: 'auto' }}>
