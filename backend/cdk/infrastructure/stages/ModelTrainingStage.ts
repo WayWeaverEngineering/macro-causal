@@ -123,6 +123,9 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
         ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
         MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
+        SUBNET_IDS: publicSubnetIds.join(','),
+        SECURITY_GROUP_IDS: taskSg.securityGroupId,
+        ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },
       layers: [
         props.commonUtilsLambdaLayer,
