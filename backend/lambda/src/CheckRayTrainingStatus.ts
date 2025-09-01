@@ -81,7 +81,8 @@ export const handler = async (
       status = 'RUNNING';
       message = 'Ray training job is starting';
     } else {
-      status = 'UNKNOWN';
+      // In case of UNKNOWN, we consider it as running
+      status = 'RUNNING';
       message = `Ray training job has unknown status: ${taskStatus}`;
     }
 

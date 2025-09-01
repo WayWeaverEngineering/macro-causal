@@ -174,12 +174,6 @@ export class ModelTrainingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
-    // Create success and failure states
-    const successStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-success`);
-    const successState = new sfn.Succeed(this, successStateId, {
-      comment: 'Model training completed successfully',
-    });
-
     const failureStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-failed`);
     const failureState = new sfn.Fail(this, failureStateId, {
       error: 'ModelTrainingFailed',
@@ -192,9 +186,8 @@ export class ModelTrainingStage extends Construct {
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${modelTrainingStageName} finished?`,
     })
-      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'SUCCESS'), successState)
-      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState)
-      .otherwise(waitState);
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'RUNNING'), waitState)
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState);
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
