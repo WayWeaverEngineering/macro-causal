@@ -24,7 +24,7 @@ export const MACRO_CAUSAL_CONSTANTS = {
 
   // EKS configurations
   EKS: {
-    KUBERNETES_VERSION: '1.27',
+    KUBERNETES_VERSION: '1.28',
     INSTANCE_TYPE: 'm5.large',
     MIN_SIZE: 1,
     MAX_SIZE: 10,
@@ -33,6 +33,7 @@ export const MACRO_CAUSAL_CONSTANTS = {
 
   // Ray configurations
   RAY: {
+    VERSION: '2.8.0',
     HEAD_CPU: '4',
     HEAD_MEMORY: '16Gi',
     WORKER_CPU: '4',

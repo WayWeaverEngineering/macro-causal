@@ -214,7 +214,7 @@ export class EksRayClusterConstruct extends Construct {
         namespace: this.rayNamespace 
       },
       spec: {
-        rayVersion: '2.9.0',
+        rayVersion: MACRO_CAUSAL_CONSTANTS.RAY.VERSION,
         enableInTreeAutoscaling: true,
         headGroupSpec: {
           serviceType: 'ClusterIP',
@@ -223,7 +223,7 @@ export class EksRayClusterConstruct extends Construct {
               serviceAccountName: 'ray-service-account',
               containers: [{
                 name: 'ray-head',
-                image: 'public.ecr.aws/rayproject/ray:2.9.0-py310',
+                image: `public.ecr.aws/rayproject/ray:${MACRO_CAUSAL_CONSTANTS.RAY.VERSION}-py310`,
                 resources: {
                   requests: { 
                     cpu: MACRO_CAUSAL_CONSTANTS.RAY.HEAD_CPU, 
@@ -254,7 +254,7 @@ export class EksRayClusterConstruct extends Construct {
               serviceAccountName: 'ray-service-account',
               containers: [{
                 name: 'ray-worker',
-                image: 'public.ecr.aws/rayproject/ray:2.9.0-py310',
+                image: `public.ecr.aws/rayproject/ray:${MACRO_CAUSAL_CONSTANTS.RAY.VERSION}-py310`,
                 resources: {
                   requests: { 
                     cpu: MACRO_CAUSAL_CONSTANTS.RAY.WORKER_CPU, 

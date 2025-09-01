@@ -2,6 +2,7 @@ import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { DefaultIdBuilder } from "../../utils/Naming";
+import { MACRO_CAUSAL_CONSTANTS } from "../../utils/Constants";
 import { EksRayClusterConstruct } from "../constructs/EksRayClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -41,7 +42,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       platform: ecrAssets.Platform.LINUX_AMD64,
       buildArgs: {
         'PYTHON_VERSION': '3.10',
-        'RAY_VERSION': '2.8.0',
+        'RAY_VERSION': MACRO_CAUSAL_CONSTANTS.RAY.VERSION,
         'TORCH_VERSION': '2.1.0'
       }
     });
