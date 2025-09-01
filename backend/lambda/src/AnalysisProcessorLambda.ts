@@ -6,6 +6,9 @@ import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { AnalysisExecution, AnalysisMessage } from "./models/AnalysisModels";
 import { DbClient } from "./clients/DbClient";
 import { initializeUuidPolyfill } from "./utils/UuidPolyfill";
+import { OpenAIService } from "./services/OpenAIService";
+import { getSecretValue } from "@wayweaver/aws-secrets";
+import { ModelServingService } from "./services/ModelServingService";
 
 // Initialize UUID polyfill to fix v6 function issue in older UUID versions
 initializeUuidPolyfill();
@@ -36,8 +39,14 @@ function removeUndefinedValues(obj: any): any {
 // Environment variables
 const {
   ANALYSIS_EXECUTIONS_TABLE,
+  OPENAI_API_SECRET_ID,
+  MODEL_SERVING_URL,
+  MODEL_SERVING_API_KEY,
 } = loadEnvVars([
   'ANALYSIS_EXECUTIONS_TABLE',
+  'OPENAI_API_SECRET_ID',
+  'MODEL_SERVING_URL',
+  'MODEL_SERVING_API_KEY',
 ]);
 
 // Initialize AWS services
@@ -129,41 +138,234 @@ async function updateExecutionStep(
   }
 }
 
-// Placeholder function for macro-causal analysis processing
-async function processMacroCausalAnalysis(query: string): Promise<any> {
-  // This is a placeholder implementation
-  // In the real implementation, this would:
-  // 1. Parse the query to understand what type of analysis is needed
-  // 2. Collect relevant macroeconomic data
-  // 3. Apply causal inference models (e.g., X-Learner, Double ML)
-  // 4. Generate insights and policy implications
+// Step 1: Convert user query to model inputs using OpenAI
+async function convertQueryToModelInputs(
+  query: string, 
+  openAIService: OpenAIService
+): Promise<any> {
+  console.log(`Converting query to model inputs: ${query}`);
   
+  const prompt = `
+You are an expert macro-causal analysis assistant. Convert this user query into structured inputs for the trained models.
+
+USER QUERY: "${query}"
+
+Based on the query, generate the appropriate input format for the hybrid causal inference models. The models expect:
+
+1. For causal effect analysis (X-Learner):
+   - Treatment variables (macro shocks like Fed rate changes, CPI surprises, GDP shocks)
+   - Outcome variables (asset returns like S&P 500, bonds, gold)
+   - Confounding variables (other macro indicators)
+   - Time periods for analysis
+
+2. For regime classification:
+   - Market indicators (VIX, yield curves, economic indicators)
+   - Lookback periods for regime identification
+
+3. For uncertainty estimation:
+   - Base estimates to quantify uncertainty around
+
+Generate a JSON response with the appropriate model inputs. Focus on the most relevant model type for this query.
+
+RESPONSE FORMAT (JSON only):
+{
+  "model_type": "hybrid_causal_model",
+  "inputs": {
+    "treatment_variables": ["fed_rate_shock", "cpi_surprise"],
+    "outcome_variables": ["sp500_returns", "bond_returns"],
+    "confounders": ["gdp_growth", "unemployment_rate", "oil_prices"],
+    "time_periods": {"start": "2020-01", "end": "2024-01"},
+    "market_indicators": ["vix", "yield_curve_slope", "economic_surprise_index"],
+    "lookback_periods": 12
+  }
+}
+`;
+
+  try {
+    const response = await openAIService.getModel().invoke(prompt);
+    const content = response.content as string;
+    
+    // Extract JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("No JSON found in OpenAI response");
+    }
+    
+    const modelInputs = JSON.parse(jsonMatch[0]);
+    console.log(`Generated model inputs:`, modelInputs);
+    
+    return modelInputs;
+  } catch (error) {
+    console.error(`Error converting query to model inputs:`, error);
+    throw error;
+  }
+}
+
+// Step 2: Submit model inference requests
+async function executeModelInference(
+  modelInputs: any, 
+  modelServingService: ModelServingService
+): Promise<any> {
+  console.log(`Executing model inference with inputs:`, modelInputs);
+  
+  try {
+    // Submit inference request to the model serving service
+    const inferenceResult = await modelServingService.submitInferenceRequest(modelInputs);
+    console.log(`Model inference completed:`, inferenceResult);
+    
+    return inferenceResult;
+  } catch (error) {
+    console.error(`Error executing model inference:`, error);
+    throw error;
+  }
+}
+
+// Step 3: Generate final response using OpenAI
+async function generateFinalResponse(
+  query: string, 
+  modelResults: any, 
+  openAIService: OpenAIService
+): Promise<string> {
+  console.log(`Generating final response for query: ${query}`);
+  
+  const prompt = `
+You are an expert macro-causal analysis assistant. Generate a comprehensive, professional response based on the user's query and the model results.
+
+USER QUERY: "${query}"
+
+MODEL RESULTS:
+${JSON.stringify(modelResults, null, 2)}
+
+Generate a detailed response that:
+1. Directly answers the user's question
+2. Explains the causal effects found by the models
+3. Interprets the regime classification and uncertainty estimates
+4. Provides actionable insights and policy implications
+5. Acknowledges limitations and assumptions
+6. Uses professional, Bridgewater-style analytical language
+
+Focus on:
+- Causal relationships, not just correlations
+- Economic significance of the effects
+- Regime-dependent behavior
+- Confidence levels and uncertainty
+- Practical investment implications
+
+RESPONSE:
+`;
+
+  try {
+    const response = await openAIService.getModel().invoke(prompt);
+    const finalResponse = response.content as string;
+    console.log(`Generated final response:`, finalResponse);
+    
+    return finalResponse;
+  } catch (error) {
+    console.error(`Error generating final response:`, error);
+    throw error;
+  }
+}
+
+// Main analysis processing function
+async function processMacroCausalAnalysis(
+  query: string, 
+  executionId: string
+): Promise<any> {
   console.log(`Processing macro-causal analysis for query: ${query}`);
   
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Return placeholder result
-  return {
-    success: true,
-    message: "Macro-causal analysis completed",
-    analysis: {
-      insight_type: 'treatment_effect',
-      summary: "Placeholder analysis result - implement actual macro-causal logic here",
-      magnitude: 0.15,
-      direction: 'positive',
-      confidence: 0.85,
-      policy_implications: ["Implement monitoring of key indicators", "Consider policy adjustments"],
-      limitations: ["Limited historical data", "Assumes ceteris paribus"],
-      data_sources: ["Federal Reserve Economic Data", "Bureau of Labor Statistics"],
-      methodology: "X-Learner with Double ML approach"
-    },
-    metadata: {
-      executionTime: 2000,
-      analysisType: "treatment_effect",
-      complexity: "moderate"
+  try {
+    // Get OpenAI API key
+    const openAIApiKey = await getSecretValue(OPENAI_API_SECRET_ID, "API_KEY");
+    if (!openAIApiKey) {
+      throw new Error("OpenAI API key not found");
     }
-  };
+
+    // Initialize services
+    const openAIService = new OpenAIService(openAIApiKey);
+    const modelServingService = new ModelServingService(MODEL_SERVING_URL, MODEL_SERVING_API_KEY);
+
+    // Step 1: Convert query to model inputs
+    const queryStep: ExecutionStep = {
+      stepId: 'step_1',
+      stepName: 'Query Analysis & Input Generation',
+      description: 'Converting natural language query to structured model inputs using OpenAI',
+      status: 'in_progress',
+      startTime: new Date(),
+      metadata: { query }
+    };
+    
+    await updateExecutionStep(executionId, queryStep);
+    
+    const modelInputs = await convertQueryToModelInputs(query, openAIService);
+    
+    queryStep.status = 'completed';
+    queryStep.endTime = new Date();
+    queryStep.metadata = { ...queryStep.metadata, modelInputs };
+    await updateExecutionStep(executionId, queryStep);
+
+    // Step 2: Execute model inference
+    const modelStep: ExecutionStep = {
+      stepId: 'step_2',
+      stepName: 'Model Inference',
+      description: 'Executing hybrid causal inference models (X-Learner + PyTorch)',
+      status: 'in_progress',
+      startTime: new Date(),
+      metadata: { modelInputs }
+    };
+    
+    await updateExecutionStep(executionId, modelStep);
+    
+    const modelResults = await executeModelInference(modelInputs, modelServingService);
+    
+    modelStep.status = 'completed';
+    modelStep.endTime = new Date();
+    modelStep.metadata = { ...modelStep.metadata, modelResults };
+    await updateExecutionStep(executionId, modelStep);
+
+    // Step 3: Generate final response
+    const responseStep: ExecutionStep = {
+      stepId: 'step_3',
+      stepName: 'Response Generation',
+      description: 'Generating comprehensive analysis response using OpenAI',
+      status: 'in_progress',
+      startTime: new Date(),
+      metadata: { modelResults }
+    };
+    
+    await updateExecutionStep(executionId, responseStep);
+    
+    const finalResponse = await generateFinalResponse(query, modelResults, openAIService);
+    
+    responseStep.status = 'completed';
+    responseStep.endTime = new Date();
+    responseStep.metadata = { ...responseStep.metadata, finalResponse };
+    await updateExecutionStep(executionId, responseStep);
+
+    // Prepare the final result
+    const analysisResult = removeUndefinedValues({
+      success: true,
+      message: "Macro-causal analysis completed successfully",
+      analysis: {
+        insight_type: 'treatment_effect',
+        summary: finalResponse,
+        model_results: modelResults,
+        model_inputs: modelInputs,
+        methodology: "Hybrid X-Learner with Double ML + PyTorch Regime/Uncertainty"
+      },
+      metadata: {
+        executionTime: Date.now() - queryStep.startTime!.getTime(),
+        analysisType: "hybrid_causal_inference",
+        complexity: "advanced",
+        stepsCompleted: 3
+      }
+    });
+
+    return analysisResult;
+    
+  } catch (error) {
+    console.error(`Error in macro-causal analysis:`, error);
+    throw error;
+  }
 }
 
 // Process a single analysis record
@@ -179,73 +381,13 @@ async function processAnalysisRecord(record: SQSRecord): Promise<void> {
       status: 'running'
     });
 
-    // Create initial step
-    const initialStep: ExecutionStep = {
-      stepId: 'step_1',
-      stepName: 'Query Analysis',
-      description: 'Analyzing user query and determining analysis requirements',
-      status: 'in_progress',
-      startTime: new Date(),
-      metadata: { query }
-    };
-    
-    await updateExecutionStep(executionId, initialStep);
-    
-    // Simulate query analysis completion
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    initialStep.status = 'completed';
-    initialStep.endTime = new Date();
-    await updateExecutionStep(executionId, initialStep);
-
-    // Create data collection step
-    const dataStep: ExecutionStep = {
-      stepId: 'step_2',
-      stepName: 'Data Collection',
-      description: 'Collecting relevant macroeconomic data and policy information',
-      status: 'in_progress',
-      startTime: new Date(),
-      metadata: { dataSources: ['FRED', 'BLS', 'CBO'] }
-    };
-    
-    await updateExecutionStep(executionId, dataStep);
-    
-    // Simulate data collection
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    dataStep.status = 'completed';
-    dataStep.endTime = new Date();
-    await updateExecutionStep(executionId, dataStep);
-
-    // Create model execution step
-    const modelStep: ExecutionStep = {
-      stepId: 'step_3',
-      stepName: 'Causal Inference',
-      description: 'Executing causal inference models and generating insights',
-      status: 'in_progress',
-      startTime: new Date(),
-      metadata: { models: ['X-Learner', 'Double ML'] }
-    };
-    
-    await updateExecutionStep(executionId, modelStep);
-    
-    // Execute the actual analysis (placeholder for now)
-    const result = await processMacroCausalAnalysis(query);
-    
-    modelStep.status = 'completed';
-    modelStep.endTime = new Date();
-    await updateExecutionStep(executionId, modelStep);
-
-    // Prepare the final result
-    const analysisResult = removeUndefinedValues({
-      success: result.success || false,
-      message: result.message || "Analysis completed",
-      analysis: result.analysis || null,
-      metadata: result.metadata || {}
-    });
+    // Execute the full analysis pipeline
+    const result = await processMacroCausalAnalysis(query, executionId);
 
     // Update status to completed with result
     await updateExecutionStatus(executionId, {
       status: 'completed',
-      result: analysisResult,
+      result: result,
       currentStep: null // Clear current step when completed
     });
 
