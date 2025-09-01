@@ -28,11 +28,19 @@ export class EksRayClusterConstruct extends Construct {
     // to avoid going over address limit
     const eksClusterVpcId = DefaultIdBuilder.build('eks-cluster-vpc');
     const vpc = new ec2.Vpc(this, eksClusterVpcId, {
-      maxAzs: 2,
+      maxAzs: 1,
       natGateways: 0,
       subnetConfiguration: [
-        { name: 'public', subnetType: ec2.SubnetType.PUBLIC },
-        { name: 'private', subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        {
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 20, // 4096 IPs, 4091 usable IPs (should be more than good enough)
+        },
+        {
+          name: 'private',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          cidrMask: 20, // 4096 IPs, 4091 usable IPs (should be more than good enough)
+        },
       ],
     });
 
