@@ -1,5 +1,5 @@
 // API Gateway paths for Macro Causal Analysis
-const apiGatewayBaseUrl = process.env.VITE_API_BASE_URL || "http://localhost:8000";
+const apiGatewayBaseUrl = "https://macro-ai-analyst-api.wayweaver.com"
 
 export const ApiGatewayPaths = {
   apiGatewayBaseUrl,
