@@ -34,11 +34,11 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy application code
 COPY . .
 
-# Make scripts executable
-RUN chmod +x main.py entrypoint.sh
+# Make main.py executable
+RUN chmod +x main.py
 
 # Expose port for inference API
 EXPOSE 8080
 
-# Set default command
-CMD ["./entrypoint.sh"]
+# Set default command to run the FastAPI server
+CMD ["python", "main.py"]
