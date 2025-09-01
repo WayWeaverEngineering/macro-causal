@@ -51,7 +51,9 @@ export class ModelTrainingStage extends Construct {
 
     // Create ECS cluster for Ray job orchestration
     const ecsClusterId = DefaultIdBuilder.build('ray-ecs-cluster');
-    const ecsCluster = new ecs.Cluster(this, ecsClusterId);
+    const ecsCluster = new ecs.Cluster(this, ecsClusterId, {
+      enableFargateCapacityProviders: true
+    });
 
     // Create ECS task definition for Ray training
     const taskDefinitionId = DefaultIdBuilder.build('ray-training-task');
