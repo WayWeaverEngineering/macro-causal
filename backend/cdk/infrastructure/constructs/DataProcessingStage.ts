@@ -92,7 +92,8 @@ export class DataProcessingStage extends Construct {
         actions: [
           'emr-serverless:StartJobRun',
           'emr-serverless:GetJobRun',
-          'emr-serverless:ListJobRuns'
+          'emr-serverless:ListJobRuns',
+          'emr-serverless:TagResource'
         ],
         resources: [emrCluster.application.attrArn]
       }));
