@@ -99,6 +99,17 @@ export class DataProcessingStage extends Construct {
       }));
     });
 
+    // Grant IAM PassRole permission to Lambda functions for EMR execution role
+    [startJobLambda, checkStatusLambda].forEach(lambdaFunc => {
+      lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:PassRole'
+        ],
+        resources: [emrCluster.executionRole.roleArn]
+      }));
+    });
+
     // Grant S3 access to Lambda for reading processing scripts
     props.dataLakeStack.bronzeBucket.grantRead(startJobLambda);
 
