@@ -147,7 +147,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Wait state before checking status
     const waitStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
-      stateName: "Waiting for Spark job to complete",
+      stateName: "Waiting for Spark job",
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 

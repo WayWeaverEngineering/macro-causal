@@ -221,7 +221,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Create wait state
     const waitStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
-      stateName: "Waiting for Ray EKS job to complete",
+      stateName: "Waiting for Ray EKS job",
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
