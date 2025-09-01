@@ -20,6 +20,14 @@ export const initialAnalysisState: AnalysisState = {
   assetReturns: [],
   error: null,
   lastExecutedAt: null,
+  // New fields from backend API
+  status: 'pending',
+  userQuery: '',
+  sessionId: null,
+  createdAt: null,
+  updatedAt: null,
+  progress: 0,
+  progressMessage: '',
 };
 
 export const initialUIState: UIState = {

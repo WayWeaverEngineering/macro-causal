@@ -30,6 +30,14 @@ export interface AnalysisState {
   assetReturns: AssetReturn[];
   error: string | null;
   lastExecutedAt: Date | null;
+  // New fields from backend API
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  userQuery: string;
+  sessionId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  progress: number;
+  progressMessage: string;
 }
 
 // UI State Types

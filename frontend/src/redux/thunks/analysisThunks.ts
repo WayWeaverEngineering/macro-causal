@@ -1,8 +1,8 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { 
-  submitCausalAnalysisRequest, 
-  submitCausalAnalysisWithProgress,
-  getCausalAnalysisStatus,
+  submitAnalysisRequest, 
+  submitAnalysisWithProgress,
+  getAnalysisStatus,
 } from '../../app/api/dataBridge';
 import { 
   startAnalysis,
@@ -17,6 +17,13 @@ import {
   setAssetReturns,
   setOutOfScope,
   analysisCompleted,
+  setAnalysisStatus,
+  updateAnalysisProgress,
+  setAnalysisError,
+  setAnalysisCreatedAt,
+  setAnalysisUpdatedAt,
+  setUserQuery,
+  setSessionId,
 } from '../actions/analysisActions';
 import { 
   setLoadingWithMessage, 
@@ -29,10 +36,10 @@ import { addRecentQuery } from '../actions/userActions';
 import { RootState } from '../store';
 
 /**
- * Thunk to submit a causal analysis request
+ * Thunk to submit an analysis request
  */
-export const submitCausalAnalysisThunk = createAsyncThunk(
-  'analysis/submitCausalAnalysis',
+export const submitAnalysisThunk = createAsyncThunk(
+  'analysis/submitAnalysis',
   async (
     query: string,
     { dispatch, getState }
@@ -40,26 +47,24 @@ export const submitCausalAnalysisThunk = createAsyncThunk(
     try {
       const state = getState() as RootState;
       const sessionId = state.user.sessionId;
-      const preferences = state.user.preferences;
       
       // Start analysis
       dispatch(startAnalysis(query));
-      dispatch(setLoadingWithMessage({ isLoading: true, message: 'Submitting causal analysis request...' }));
+      dispatch(setSessionId(sessionId));
+      dispatch(setUserQuery(query));
+      dispatch(setLoadingWithMessage({ isLoading: true, message: 'Submitting analysis request...' }));
       dispatch(showProgressBar(0));
       
       // Submit request to backend
-      const response = await submitCausalAnalysisRequest(query, { 
+      const response = await submitAnalysisRequest(query, { 
         sessionId,
-        macroVariables: preferences.preferredAssets,
-        assets: preferences.preferredAssets,
-        timeframe: preferences.defaultTimeframe,
       });
       
       if (!response.success) {
-        dispatch(analysisFailed(response.message));
+        dispatch(analysisFailed(response.message || 'Analysis request failed'));
         dispatch(setLoadingWithMessage({ isLoading: false }));
         dispatch(hideProgressBar());
-        dispatch(showError(response.message));
+        dispatch(showError(response.message || 'Analysis request failed'));
         return response;
       }
       
@@ -79,7 +84,7 @@ export const submitCausalAnalysisThunk = createAsyncThunk(
       dispatch(addRecentQuery(query));
       
       // Start polling for status updates
-      dispatch(pollCausalAnalysisStatusThunk(response.executionId));
+      dispatch(pollAnalysisStatusThunk(response.executionId));
       
       return response;
     } catch (error) {
@@ -94,10 +99,10 @@ export const submitCausalAnalysisThunk = createAsyncThunk(
 );
 
 /**
- * Thunk to poll for causal analysis status updates
+ * Thunk to poll for analysis status updates
  */
-export const pollCausalAnalysisStatusThunk = createAsyncThunk(
-  'analysis/pollCausalAnalysisStatus',
+export const pollAnalysisStatusThunk = createAsyncThunk(
+  'analysis/pollAnalysisStatus',
   async (
     executionId: string,
     { dispatch }
@@ -108,19 +113,30 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
       const startTime = Date.now();
       
       while (Date.now() - startTime < maxPollTime) {
-        const response = await getCausalAnalysisStatus(executionId);
+        const response = await getAnalysisStatus(executionId);
         
         if (!response.success) {
-          dispatch(analysisFailed(response.message));
+          dispatch(analysisFailed(response.message || 'Status check failed'));
           dispatch(setLoadingWithMessage({ isLoading: false }));
           dispatch(hideProgressBar());
-          dispatch(showError(response.message));
+          dispatch(showError(response.message || 'Status check failed'));
           return response;
         }
         
         const status = response.status;
         const steps = response.steps || [];
         const currentStep = response.currentStep;
+        
+        // Update status
+        dispatch(setAnalysisStatus(status));
+        
+        // Update timestamps if available
+        if (response.createdAt) {
+          dispatch(setAnalysisCreatedAt(response.createdAt));
+        }
+        if (response.updatedAt) {
+          dispatch(setAnalysisUpdatedAt(response.updatedAt));
+        }
         
         // Update execution steps
         steps.forEach(step => {
@@ -141,12 +157,13 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
         const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
         
         dispatch(updateProgressBar({ progress, message: currentStep?.description || 'Processing...' }));
+        dispatch(updateAnalysisProgress({ progress, message: currentStep?.description || 'Processing...' }));
         
         // Check if analysis is complete or failed
         if (status === 'completed') {
           // Set final results
-          if (response.analysis) {
-            dispatch(setAnalysisResult(response.analysis));
+          if (response.result) {
+            dispatch(setAnalysisResult(response.result));
           }
           if (response.metadata) {
             dispatch(setAnalysisMetadata(response.metadata));
@@ -159,8 +176,8 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
           }
           
           // Check if out of scope
-          if (response.outOfScopeReason) {
-            dispatch(setOutOfScope({ isInScope: false, reason: response.outOfScopeReason }));
+          if (response.error && response.error.includes('out of scope')) {
+            dispatch(setOutOfScope({ isInScope: false, reason: response.error }));
           }
           
           dispatch(analysisCompleted());
@@ -173,6 +190,7 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
         if (status === 'failed') {
           const errorMsg = response.error || 'Analysis failed';
           dispatch(analysisFailed(errorMsg));
+          dispatch(setAnalysisError(errorMsg));
           dispatch(setLoadingWithMessage({ isLoading: false }));
           dispatch(hideProgressBar());
           dispatch(showError(errorMsg));
@@ -185,6 +203,7 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
       
       const timeoutMsg = 'Analysis polling timed out';
       dispatch(analysisFailed(timeoutMsg));
+      dispatch(setAnalysisError(timeoutMsg));
       dispatch(setLoadingWithMessage({ isLoading: false }));
       dispatch(hideProgressBar());
       dispatch(showError(timeoutMsg));
@@ -193,6 +212,7 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       dispatch(analysisFailed(errorMessage));
+      dispatch(setAnalysisError(errorMessage));
       dispatch(setLoadingWithMessage({ isLoading: false }));
       dispatch(hideProgressBar());
       dispatch(showError(errorMessage));
@@ -204,8 +224,8 @@ export const pollCausalAnalysisStatusThunk = createAsyncThunk(
 /**
  * Thunk to submit analysis with progress updates
  */
-export const submitCausalAnalysisWithProgressThunk = createAsyncThunk(
-  'analysis/submitCausalAnalysisWithProgress',
+export const submitAnalysisWithProgressThunk = createAsyncThunk(
+  'analysis/submitAnalysisWithProgress',
   async (
     query: string,
     { dispatch, getState }
@@ -213,41 +233,40 @@ export const submitCausalAnalysisWithProgressThunk = createAsyncThunk(
     try {
       const state = getState() as RootState;
       const sessionId = state.user.sessionId;
-      const preferences = state.user.preferences;
       
       // Start analysis
       dispatch(startAnalysis(query));
-      dispatch(setLoadingWithMessage({ isLoading: true, message: 'Starting causal analysis...' }));
+      dispatch(setSessionId(sessionId));
+      dispatch(setUserQuery(query));
+      dispatch(setLoadingWithMessage({ isLoading: true, message: 'Starting analysis...' }));
       dispatch(showProgressBar(0));
       
       // Submit request with progress updates
-      const response = await submitCausalAnalysisWithProgress(
+      const response = await submitAnalysisWithProgress(
         query,
         (_, progress, message) => {
           dispatch(setLoadingWithMessage({ isLoading: true, message }));
           dispatch(updateProgressBar({ progress, message }));
+          dispatch(updateAnalysisProgress({ progress, message }));
         },
         { 
           sessionId,
-          macroVariables: preferences.preferredAssets,
-          assets: preferences.preferredAssets,
-          timeframe: preferences.defaultTimeframe,
           pollInterval: 2000,
           maxPollTime: 300000,
         }
       );
       
       if (!response.success) {
-        dispatch(analysisFailed(response.message));
+        dispatch(analysisFailed(response.message || 'Analysis failed'));
         dispatch(setLoadingWithMessage({ isLoading: false }));
         dispatch(hideProgressBar());
-        dispatch(showError(response.message));
+        dispatch(showError(response.message || 'Analysis failed'));
         return response;
       }
       
       // Handle the response
-      if (response.analysis) {
-        dispatch(setAnalysisResult(response.analysis));
+      if (response.result) {
+        dispatch(setAnalysisResult(response.result));
       }
       if (response.metadata) {
         dispatch(setAnalysisMetadata(response.metadata));
@@ -260,8 +279,8 @@ export const submitCausalAnalysisWithProgressThunk = createAsyncThunk(
       }
       
       // Check if out of scope
-      if (response.outOfScopeReason) {
-        dispatch(setOutOfScope({ isInScope: false, reason: response.outOfScopeReason }));
+      if (response.error && response.error.includes('out of scope')) {
+        dispatch(setOutOfScope({ isInScope: false, reason: response.error }));
       }
       
       dispatch(analysisCompleted());
@@ -272,6 +291,7 @@ export const submitCausalAnalysisWithProgressThunk = createAsyncThunk(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       dispatch(analysisFailed(errorMessage));
+      dispatch(setAnalysisError(errorMessage));
       dispatch(setLoadingWithMessage({ isLoading: false }));
       dispatch(hideProgressBar());
       dispatch(showError(errorMessage));
@@ -279,3 +299,8 @@ export const submitCausalAnalysisWithProgressThunk = createAsyncThunk(
     }
   }
 );
+
+// Legacy thunks for backward compatibility
+export const submitCausalAnalysisThunk = submitAnalysisThunk;
+export const pollCausalAnalysisStatusThunk = pollAnalysisStatusThunk;
+export const submitCausalAnalysisWithProgressThunk = submitAnalysisWithProgressThunk;

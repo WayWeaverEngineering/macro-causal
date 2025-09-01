@@ -22,3 +22,12 @@ export const analysisCompleted = createAction('analysis/analysisCompleted');
 export const analysisFailed = createAction<string>('analysis/analysisFailed');
 export const resetAnalysis = createAction('analysis/resetAnalysis');
 export const clearError = createAction('analysis/clearError');
+
+// New actions for status updates
+export const setAnalysisStatus = createAction<'pending' | 'running' | 'completed' | 'failed'>('analysis/setAnalysisStatus');
+export const updateAnalysisProgress = createAction<{ progress: number; message: string }>('analysis/updateAnalysisProgress');
+export const setAnalysisError = createAction<string | null>('analysis/setAnalysisError');
+export const setAnalysisCreatedAt = createAction<string>('analysis/setAnalysisCreatedAt');
+export const setAnalysisUpdatedAt = createAction<string>('analysis/setAnalysisUpdatedAt');
+export const setUserQuery = createAction<string>('analysis/setUserQuery');
+export const setSessionId = createAction<string>('analysis/setSessionId');

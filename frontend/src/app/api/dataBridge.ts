@@ -15,12 +15,12 @@ const ApiRequests = {
 };
 
 /**
- * Submit a causal analysis request to the backend
+ * Submit an analysis request to the backend
  * @param query - The user's analysis query
  * @param options - Optional parameters for the analysis request
  * @returns Promise<BackendAnalysisResponse> - The backend response with execution ID
  */
-export const submitCausalAnalysisRequest = async (
+export const submitAnalysisRequest = async (
   query: string,
   options?: {
     sessionId?: string;
@@ -34,13 +34,10 @@ export const submitCausalAnalysisRequest = async (
     const payload = {
       query,
       sessionId: options?.sessionId,
-      macroVariables: options?.macroVariables || ['GDP', 'CPI', 'FedRate', 'Unemployment', 'OilPrice'],
-      assets: options?.assets || ['SP500', 'TLT', 'GLD', 'USO', 'VIX'],
-      timeframe: options?.timeframe || '1Y',
     };
 
     const response = await ApiRequests.post<BackendAnalysisResponse>(
-      ApiGatewayPaths.causalAnalysisPath,
+      ApiGatewayPaths.analysisPath,
       payload
     );
 
@@ -49,7 +46,7 @@ export const submitCausalAnalysisRequest = async (
       message: 'No response received from backend',
     };
   } catch (error) {
-    console.error('Causal analysis request failed:', error);
+    console.error('Analysis request failed:', error);
     
     // Handle different types of errors
     if (axios.isAxiosError(error)) {
@@ -88,16 +85,16 @@ export const submitCausalAnalysisRequest = async (
 };
 
 /**
- * Get the status of a causal analysis execution
- * @param executionId - The execution ID returned from submitCausalAnalysisRequest
+ * Get the status of an analysis execution
+ * @param executionId - The execution ID returned from submitAnalysisRequest
  * @returns Promise<BackendAnalysisResponse> - The current status and results
  */
-export const getCausalAnalysisStatus = async (
+export const getAnalysisStatus = async (
   executionId: string
 ): Promise<BackendAnalysisResponse> => {
   try {
     const response = await ApiRequests.get<BackendAnalysisResponse>(
-      ApiGatewayPaths.getCausalAnalysisStatusPath(executionId)
+      ApiGatewayPaths.getAnalysisStatusPath(executionId)
     );
 
     return response || {
@@ -105,7 +102,7 @@ export const getCausalAnalysisStatus = async (
       message: 'No response received from backend',
     };
   } catch (error) {
-    console.error('Causal analysis status request failed:', error);
+    console.error('Analysis status request failed:', error);
     
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 404) {
@@ -136,13 +133,13 @@ export const getCausalAnalysisStatus = async (
 };
 
 /**
- * Poll for causal analysis status updates
+ * Poll for analysis status updates
  * @param executionId - The execution ID to poll
  * @param onProgress - Callback for progress updates
  * @param options - Polling options
  * @returns Promise<BackendAnalysisResponse> - Final result
  */
-export const pollCausalAnalysisStatus = async (
+export const pollAnalysisStatus = async (
   executionId: string,
   onProgress?: (status: string, progress: number, message: string) => void,
   options?: {
@@ -157,7 +154,7 @@ export const pollCausalAnalysisStatus = async (
   
   try {
     while (Date.now() - startTime < maxPollTime) {
-      const response = await getCausalAnalysisStatus(executionId);
+      const response = await getAnalysisStatus(executionId);
       
       if (!response.success) {
         return response;
@@ -197,7 +194,7 @@ export const pollCausalAnalysisStatus = async (
       message: 'Analysis polling timed out',
     };
   } catch (error) {
-    console.error('Causal analysis polling failed:', error);
+    console.error('Analysis polling failed:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Polling error occurred',
@@ -206,13 +203,13 @@ export const pollCausalAnalysisStatus = async (
 };
 
 /**
- * Submit a causal analysis request with real-time progress updates
+ * Submit an analysis request with real-time progress updates
  * @param query - The user's analysis query
  * @param onProgress - Callback function for progress updates
  * @param options - Optional parameters for the analysis request
  * @returns Promise<BackendAnalysisResponse> - The backend response
  */
-export const submitCausalAnalysisWithProgress = async (
+export const submitAnalysisWithProgress = async (
   query: string,
   onProgress?: (status: string, progress: number, message: string) => void,
   options?: {
@@ -227,9 +224,9 @@ export const submitCausalAnalysisWithProgress = async (
 ): Promise<BackendAnalysisResponse> => {
   try {
     // Submit the analysis request
-    onProgress?.('pending', 0, 'Submitting causal analysis request...');
+    onProgress?.('pending', 0, 'Submitting analysis request...');
     
-    const submitResponse = await submitCausalAnalysisRequest(query, options);
+    const submitResponse = await submitAnalysisRequest(query, options);
     
     if (!submitResponse.success || !submitResponse.executionId) {
       return submitResponse;
@@ -238,7 +235,7 @@ export const submitCausalAnalysisWithProgress = async (
     onProgress?.('pending', 0, 'Analysis scheduled, starting processing...');
     
     // Poll for status updates
-    const finalResponse = await pollCausalAnalysisStatus(
+    const finalResponse = await pollAnalysisStatus(
       submitResponse.executionId,
       onProgress,
       {
@@ -249,7 +246,7 @@ export const submitCausalAnalysisWithProgress = async (
     
     return finalResponse;
   } catch (error) {
-    console.error('Causal analysis request with progress failed:', error);
+    console.error('Analysis request with progress failed:', error);
     onProgress?.('failed', 0, 'Analysis failed');
     
     return {
@@ -258,3 +255,9 @@ export const submitCausalAnalysisWithProgress = async (
     };
   }
 };
+
+// Legacy functions for backward compatibility
+export const submitCausalAnalysisRequest = submitAnalysisRequest;
+export const getCausalAnalysisStatus = getAnalysisStatus;
+export const pollCausalAnalysisStatus = pollAnalysisStatus;
+export const submitCausalAnalysisWithProgress = submitAnalysisWithProgress;

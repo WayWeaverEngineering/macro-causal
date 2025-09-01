@@ -3,10 +3,9 @@ const apiGatewayBaseUrl = "https://macro-ai-analyst-api.wayweaver.com"
 
 export const ApiGatewayPaths = {
   apiGatewayBaseUrl,
-  causalAnalysisPath: '/causal-analysis',
-  getCausalAnalysisStatusPath: (executionId: string) => `/causal-analysis/${executionId}`,
-  regimeAnalysisPath: '/regime-analysis',
-  uncertaintyAnalysisPath: '/uncertainty-analysis',
-  macroVariablesPath: '/macro-variables',
-  assetReturnsPath: '/asset-returns'
+  analysisPath: '/analysis',
+  getAnalysisStatusPath: (executionId: string) => `/analysis/${executionId}`,
+  // Legacy paths for backward compatibility
+  causalAnalysisPath: '/analysis',
+  getCausalAnalysisStatusPath: (executionId: string) => `/analysis/${executionId}`,
 };

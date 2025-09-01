@@ -13,7 +13,7 @@ import {
   Alert
 } from '@mui/material';
 import { Send, Lightbulb, Speed } from '@mui/icons-material';
-import { submitCausalAnalysisThunk } from '../../redux/thunks/analysisThunks';
+import { submitAnalysisThunk } from '../../redux/thunks/analysisThunks';
 import { 
   selectIsExecuting, 
   selectCurrentQuery, 
@@ -40,7 +40,7 @@ export const QueryInput = () => {
 
   const handleSubmit = () => {
     if (query.trim() && !isExecuting) {
-      dispatch(submitCausalAnalysisThunk(query.trim()));
+      dispatch(submitAnalysisThunk(query.trim()));
     }
   };
 

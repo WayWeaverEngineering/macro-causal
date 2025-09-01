@@ -54,7 +54,17 @@ export const selectIsOutOfScope = (state: RootState) => {
   return !state.analysis.isInScope;
 };
 
-export const selectAnalysisStatus = (state: RootState) => {
+// New selectors for backend API fields
+export const selectAnalysisStatus = (state: RootState) => state.analysis.status;
+export const selectUserQuery = (state: RootState) => state.analysis.userQuery;
+export const selectAnalysisSessionId = (state: RootState) => state.analysis.sessionId;
+export const selectAnalysisCreatedAt = (state: RootState) => state.analysis.createdAt;
+export const selectAnalysisUpdatedAt = (state: RootState) => state.analysis.updatedAt;
+export const selectAnalysisProgress = (state: RootState) => state.analysis.progress;
+export const selectAnalysisProgressMessage = (state: RootState) => state.analysis.progressMessage;
+
+// Updated to use the new status field from backend API
+export const selectAnalysisStatusText = (state: RootState) => {
   if (state.analysis.error) return 'failed';
   if (state.analysis.analysis) return 'completed';
   if (state.analysis.isExecuting) return 'running';
