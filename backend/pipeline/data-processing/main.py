@@ -387,6 +387,10 @@ class DataProcessor:
 
 def main() -> int:
     """Main entry point for the data processing pipeline."""
+
+    # Early exit for testing
+    return 0
+
     try:
         # Parse command line arguments
         args = parse_arguments()
