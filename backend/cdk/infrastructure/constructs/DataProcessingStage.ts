@@ -20,7 +20,7 @@ export interface DataProcessingStageProps {
 
 export class DataProcessingStage extends Construct {
   readonly workflow: sfn.Chain;
-  readonly jobStatusChoice: sfn.Choice;
+  readonly successState: sfn.Pass;
 
   constructor(scope: Construct, id: string, props: DataProcessingStageProps) {
     super(scope, id);
@@ -147,7 +147,7 @@ export class DataProcessingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
-    const successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
+    this.successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
       stateName: `${dataProcessingStageName} succeeded`,
       comment: 'Data processing stage finished successfully'
     });
@@ -160,19 +160,18 @@ export class DataProcessingStage extends Construct {
 
     // Create a choice state to check job status
     const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
-    this.jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
+    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
     }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState);
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), this.successState)
+      .otherwise(waitState);
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
 
     // Build the job monitoring workflow
-    const dataProcessingTask = startJobTask
+    this.workflow = startJobTask
       .next(checkStatusTask)
-      .next(this.jobStatusChoice);
-
-    this.workflow = sfn.Chain.start(dataProcessingTask);
+      .next(jobStatusChoice);
   }
 }

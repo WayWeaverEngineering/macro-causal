@@ -193,11 +193,9 @@ export class ModelTrainingStage extends Construct {
     waitState.next(checkStatusTask);
 
     // Build the training workflow
-    const trainingTask = startTrainingTask
+    this.workflow = startTrainingTask
       .next(checkStatusTask)
       .next(jobStatusChoice);
-
-    this.workflow = sfn.Chain.start(trainingTask);
   }
 
   private createTaskRole(props: ModelTrainingStageProps): iam.Role {
