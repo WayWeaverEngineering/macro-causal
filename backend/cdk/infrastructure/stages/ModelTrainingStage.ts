@@ -95,16 +95,16 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     const container = taskDefinition.addContainer(containerId, {
       image: ecs.ContainerImage.fromDockerImageAsset(modelTrainingImage),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: modelTrainingStageName }),
-              environment: {
-          EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
-          RAY_NAMESPACE: rayCluster.rayNamespace,
-          GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
-          ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
-          MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
-          SUBNET_IDS: publicSubnetIds.join(','),
-          SECURITY_GROUP_IDS: taskSg.securityGroupId,
-          ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
-        },
+      environment: {
+        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
+        RAY_NAMESPACE: rayCluster.rayNamespace,
+        GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
+        ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
+        SUBNET_IDS: publicSubnetIds.join(','),
+        SECURITY_GROUP_IDS: taskSg.securityGroupId,
+        ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
+      },
     });
 
     // Create Lambda function to start Ray training job
