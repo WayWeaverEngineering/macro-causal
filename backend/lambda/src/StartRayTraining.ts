@@ -27,7 +27,10 @@ const {
   RAY_NAMESPACE,
   GOLD_BUCKET,
   ARTIFACTS_BUCKET,
-  MODEL_REGISTRY_TABLE
+  MODEL_REGISTRY_TABLE,
+  SUBNET_IDS,
+  SECURITY_GROUP_IDS,
+  ASSIGN_PUBLIC_IP
 } = loadEnvVars([
   'ECS_CLUSTER_ARN',
   'TASK_DEFINITION_ARN',
@@ -36,7 +39,10 @@ const {
   'RAY_NAMESPACE',
   'GOLD_BUCKET',
   'ARTIFACTS_BUCKET',
-  'MODEL_REGISTRY_TABLE'
+  'MODEL_REGISTRY_TABLE',
+  'SUBNET_IDS',
+  'SECURITY_GROUP_IDS',
+  'ASSIGN_PUBLIC_IP'
 ]);
 
 export const handler = async (
@@ -47,6 +53,11 @@ export const handler = async (
   console.log('Event:', JSON.stringify(event, null, 2));
 
   try {
+    // Validate required network configuration
+    if (!SUBNET_IDS || !SECURITY_GROUP_IDS || !ASSIGN_PUBLIC_IP) {
+      throw new Error('Missing required network configuration: SUBNET_IDS, SECURITY_GROUP_IDS, or ASSIGN_PUBLIC_IP');
+    }
+
     // Extract data from event
     const requestData = 'body' in event ? JSON.parse(event.body || '{}') : event;
     const { executionId, executionStartTime } = requestData;
@@ -56,6 +67,7 @@ export const handler = async (
     }
 
     console.log(`Starting Ray training job for execution: ${executionId}`);
+    console.log(`Network config - Subnets: ${SUBNET_IDS}, Security Groups: ${SECURITY_GROUP_IDS}, Public IP: ${ASSIGN_PUBLIC_IP}`);
 
     const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
 
@@ -64,6 +76,13 @@ export const handler = async (
       cluster: ECS_CLUSTER_ARN,
       taskDefinition: TASK_DEFINITION_ARN,
       launchType: 'FARGATE' as const,
+      networkConfiguration: {
+        awsvpcConfiguration: {
+          subnets: SUBNET_IDS!.split(','),
+          securityGroups: SECURITY_GROUP_IDS!.split(','),
+          assignPublicIp: (ASSIGN_PUBLIC_IP === 'ENABLED' ? 'ENABLED' : 'DISABLED') as 'ENABLED' | 'DISABLED',
+        },
+      },
       overrides: {
         containerOverrides: [
           {

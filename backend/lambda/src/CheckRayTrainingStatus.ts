@@ -15,8 +15,14 @@ interface CheckRayTrainingStatusResponse {
 // Environment variables
 const {
   ECS_CLUSTER_ARN,
+  SUBNET_IDS,
+  SECURITY_GROUP_IDS,
+  ASSIGN_PUBLIC_IP,
 } = loadEnvVars([
   'ECS_CLUSTER_ARN',
+  'SUBNET_IDS',
+  'SECURITY_GROUP_IDS',
+  'ASSIGN_PUBLIC_IP',
 ]);
 
 export const handler = async (
@@ -27,6 +33,11 @@ export const handler = async (
   console.log('Event:', JSON.stringify(event, null, 2));
 
   try {
+    // Validate required network configuration
+    if (!SUBNET_IDS || !SECURITY_GROUP_IDS || !ASSIGN_PUBLIC_IP) {
+      console.warn('Missing network configuration environment variables - this may cause issues with future ECS operations');
+    }
+
     // Extract data from event - handle different input formats
     let taskArn: string;
     

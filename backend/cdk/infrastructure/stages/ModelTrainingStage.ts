@@ -9,10 +9,11 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import { Duration, Stack } from 'aws-cdk-lib';
+import { Duration } from 'aws-cdk-lib';
 import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface ModelTrainingStageProps {
   dataLakeStack: DataLakeStack;
@@ -55,10 +56,29 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create ECS cluster for Ray job orchestration
+    // IMPORTANT: ECS cluster must be in the SAME VPC as EKS cluster for Fargate tasks
+    // to reach the private EKS API endpoint without NAT gateways
     const ecsClusterId = DefaultIdBuilder.build('ray-ecs-cluster');
     const ecsCluster = new ecs.Cluster(this, ecsClusterId, {
-      enableFargateCapacityProviders: true
+      vpc: rayCluster.cluster.vpc,             // <— SAME VPC AS EKS
+      enableFargateCapacityProviders: true,
     });
+
+    // Add a Security Group for Fargate tasks
+    // This SG allows outbound access to VPC endpoints (EKS, ECR, Logs, S3, STS, EC2)
+    // No inbound rules needed - tasks only need to reach AWS services via endpoints
+    const taskSg = new ec2.SecurityGroup(this, DefaultIdBuilder.build('ray-ecs-task-sg'), {
+      vpc: ecsCluster.vpc,
+      description: 'SG for Ray training Fargate tasks',
+      allowAllOutbound: true, // Needed for VPC endpoints, ECR, CW Logs, etc.
+    });
+
+    // Select the PRIVATE_ISOLATED subnets
+    // These subnets have no NAT gateways and rely on VPC endpoints for AWS service access
+    // This ensures Fargate tasks can reach the private EKS API endpoint
+    const isolatedSubnetIds = ecsCluster.vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+    }).subnetIds;
 
     // Create ECS task definition for Ray training
     const taskDefinitionId = DefaultIdBuilder.build('ray-training-task');
@@ -74,13 +94,16 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     const container = taskDefinition.addContainer(containerId, {
       image: ecs.ContainerImage.fromDockerImageAsset(modelTrainingImage),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: modelTrainingStageName }),
-      environment: {
-        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
-        RAY_NAMESPACE: rayCluster.rayNamespace,
-        GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
-        ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
-        MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
-      },
+              environment: {
+          EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
+          RAY_NAMESPACE: rayCluster.rayNamespace,
+          GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
+          ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
+          MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
+          SUBNET_IDS: isolatedSubnetIds.join(','),
+          SECURITY_GROUP_IDS: taskSg.securityGroupId,
+          ASSIGN_PUBLIC_IP: 'DISABLED', // private isolated subnets → no public IP
+        },
     });
 
     // Create Lambda function to start Ray training job
@@ -114,7 +137,10 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
       timeout: Duration.minutes(1),
       environment: {
-        ECS_CLUSTER_ARN: ecsCluster.clusterArn
+        ECS_CLUSTER_ARN: ecsCluster.clusterArn,
+        SUBNET_IDS: isolatedSubnetIds.join(','),
+        SECURITY_GROUP_IDS: taskSg.securityGroupId,
+        ASSIGN_PUBLIC_IP: 'DISABLED', // private isolated subnets → no public IP
       },  
       layers: [
         props.commonUtilsLambdaLayer,
