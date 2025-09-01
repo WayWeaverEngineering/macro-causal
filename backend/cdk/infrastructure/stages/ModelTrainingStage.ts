@@ -130,6 +130,9 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
           'ecs:StopTask',
           'ecs:DescribeTasks',
           'ecs:ListTasks',
+          'ecs:TagResource',
+          'ecs:UntagResource',
+          'ecs:ListTagsForResource',
         ],
         resources: ['*'],
       }));
@@ -255,6 +258,19 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       resources: ['*'],
     }));
 
+    // Grant ECS permissions for task operations
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecs:TagResource',
+        'ecs:UntagResource',
+        'ecs:ListTagsForResource',
+        'ecs:DescribeTasks',
+        'ecs:DescribeTaskDefinition',
+      ],
+      resources: ['*'],
+    }));
+
     return taskRole;
   }
 
@@ -266,6 +282,41 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
       ],
     });
+
+    // Add ECS permissions for tagging resources and other operations
+    executionRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecs:TagResource',
+        'ecs:UntagResource',
+        'ecs:ListTagsForResource',
+        'ecs:DescribeTasks',
+        'ecs:DescribeTaskDefinition',
+        'ecs:DescribeServices',
+        'ecs:DescribeClusters',
+        'ecs:UpdateService',
+        'ecs:UpdateTaskSet',
+        'ecs:UpdateTaskDefinition',
+        'ecs:CreateService',
+        'ecs:DeleteService',
+        'ecs:CreateTaskSet',
+        'ecs:DeleteTaskSet',
+      ],
+      resources: ['*'],
+    }));
+
+    // Add CloudWatch Logs permissions for ECS task logging
+    executionRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogGroups',
+        'logs:DescribeLogStreams',
+      ],
+      resources: ['*'],
+    }));
 
     return executionRole;
   }
