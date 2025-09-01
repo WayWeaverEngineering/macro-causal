@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     git \
     build-essential \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install kubectl for EKS cluster management
