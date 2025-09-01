@@ -10,6 +10,7 @@ import {
 import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionStack";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { MLPipelineStack } from "../stacks/MLPipelineStack";
+import { ModelRegistryStack } from "../stacks/ModelRegistryStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -29,6 +30,12 @@ export class DeploymentStage extends Stage {
       region: this.region ?? DEFAULT_REGION,
     });
 
+    const modelRegistryStackId = DefaultIdBuilder.build('model-registry-stack');
+    const modelRegistryStack = new ModelRegistryStack(this, modelRegistryStackId, {
+      accountId: this.account ?? AWS_ADMIN_ACCOUNT_ID,
+      region: this.region ?? DEFAULT_REGION,
+    });
+
     const lambdaLayersStackId = DefaultIdBuilder.build('lambda-layers-stack')
     const lambdaLayersStack = new PrebuiltLambdaLayersStack(this, lambdaLayersStackId, {
       arns: props.prebuiltLambdaLayerArns
@@ -37,9 +44,11 @@ export class DeploymentStage extends Stage {
     const mlPipelineStackId = DefaultIdBuilder.build('ml-pipeline-stack');
     const mlPipelineStack = new MLPipelineStack(this, mlPipelineStackId, {
       dataLakeStack,
-      lambdaLayersStack
+      lambdaLayersStack,
+      modelRegistryTable: modelRegistryStack.modelRegistryTable.tableName
     });
 
     mlPipelineStack.addDependency(dataLakeStack);
+    mlPipelineStack.addDependency(modelRegistryStack);
   }
 }

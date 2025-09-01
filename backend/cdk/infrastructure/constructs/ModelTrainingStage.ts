@@ -1,0 +1,247 @@
+import { Construct } from "constructs";
+import * as path from 'path';
+import { DataLakeStack } from "../stacks/DataLakeStack";
+import { DefaultIdBuilder } from "../../utils/Naming";
+import { EksRayClusterConstruct } from "./EksRayClusterConstruct";
+import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import { Duration, Stack } from 'aws-cdk-lib';
+import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
+import { LambdaConfig } from "../configs/LambdaConfig";
+
+export interface ModelTrainingStageProps {
+  dataLakeStack: DataLakeStack;
+  commonUtilsLambdaLayer: ILayerVersion;
+  ecsLambdaLayer: ILayerVersion;
+  modelRegistryTable: string;
+}
+
+export class ModelTrainingStage extends Construct {
+  readonly workflow: sfn.Chain;
+
+  constructor(scope: Construct, id: string, props: ModelTrainingStageProps) {
+    super(scope, id);
+
+    const modelTrainingStageName = 'model-training';
+
+    // Create Docker image asset for model training code
+    const modelTrainingImageId = DefaultIdBuilder.build('model-training-image');
+    const modelTrainingImage = new ecrAssets.DockerImageAsset(this, modelTrainingImageId, {
+      directory: `../pipeline/${modelTrainingStageName}`,
+      platform: ecrAssets.Platform.LINUX_AMD64,
+      buildArgs: {
+        'PYTHON_VERSION': '3.10',
+        'RAY_VERSION': '2.8.0',
+        'TORCH_VERSION': '2.1.0'
+      }
+    });
+
+    // Create EKS cluster for Ray training
+    const rayClusterId = DefaultIdBuilder.build('ray-cluster');
+    const rayCluster = new EksRayClusterConstruct(this, rayClusterId, {
+      name: modelTrainingStageName,
+      goldBucket: props.dataLakeStack.goldBucket,
+      artifactsBucket: props.dataLakeStack.artifactsBucket,
+      modelRegistryTable: props.modelRegistryTable,
+    });
+
+    // Create ECS cluster for Ray job orchestration
+    const ecsClusterId = DefaultIdBuilder.build('ray-ecs-cluster');
+    const ecsCluster = new ecs.Cluster(this, ecsClusterId);
+
+    // Create ECS task definition for Ray training
+    const taskDefinitionId = DefaultIdBuilder.build('ray-training-task');
+    const taskDefinition = new ecs.FargateTaskDefinition(this, taskDefinitionId, {
+      cpu: 2048,
+      memoryLimitMiB: 4096,
+      taskRole: this.createTaskRole(props),
+    });
+
+    // Add container to task definition
+    const containerId = DefaultIdBuilder.build('ray-training-container');
+    const container = taskDefinition.addContainer(containerId, {
+      image: ecs.ContainerImage.fromDockerImageAsset(modelTrainingImage),
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: modelTrainingStageName }),
+      environment: {
+        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
+        RAY_NAMESPACE: rayCluster.rayNamespace,
+        GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
+        ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable,
+      },
+    });
+
+    // Create Lambda function to start Ray training job
+    const startTrainingLambdaId = DefaultIdBuilder.build('start-ray-training-lambda');
+    const startTrainingLambda = new LambdaFunction(this, startTrainingLambdaId, {
+      code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
+      handler: 'StartRayTraining.handler',
+      runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
+      timeout: Duration.minutes(5),
+      environment: {
+        ECS_CLUSTER_ARN: ecsCluster.clusterArn,
+        TASK_DEFINITION_ARN: taskDefinition.taskDefinitionArn,
+        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
+        RAY_NAMESPACE: rayCluster.rayNamespace,
+        GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
+        ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable,
+      },
+      layers: [
+        props.commonUtilsLambdaLayer,
+        props.ecsLambdaLayer,
+      ],
+    });
+
+    // Create Lambda function to check Ray training job status
+    const checkTrainingStatusLambdaId = DefaultIdBuilder.build('check-ray-training-status-lambda');
+    const checkTrainingStatusLambda = new LambdaFunction(this, checkTrainingStatusLambdaId, {
+      code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
+      handler: 'CheckRayTrainingStatus.handler',
+      runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
+      timeout: Duration.minutes(1),
+      environment: {
+        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
+        RAY_NAMESPACE: rayCluster.rayNamespace,
+      },
+      layers: [
+        props.commonUtilsLambdaLayer,
+        props.ecsLambdaLayer,
+      ],
+    });
+
+    // Grant ECS permissions to Lambda functions
+    [startTrainingLambda, checkTrainingStatusLambda].forEach(lambdaFunc => {
+      lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ecs:RunTask',
+          'ecs:StopTask',
+          'ecs:DescribeTasks',
+          'ecs:ListTasks',
+        ],
+        resources: ['*'],
+      }));
+
+      lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:PassRole',
+        ],
+        resources: [taskDefinition.taskRole.roleArn, taskDefinition.executionRole?.roleArn || ''],
+      }));
+    });
+
+    // Grant EKS permissions to Lambda functions
+    [startTrainingLambda, checkTrainingStatusLambda].forEach(lambdaFunc => {
+      lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'eks:DescribeCluster',
+          'eks:ListPods',
+          'eks:DescribePod',
+        ],
+        resources: [rayCluster.cluster.clusterArn],
+      }));
+    });
+
+    // Create Step Functions tasks
+    const startTrainingTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-start-task`);
+    const startTrainingTask = new tasks.LambdaInvoke(this, startTrainingTaskId, {
+      stateName: `${modelTrainingStageName}-start`,
+      comment: 'Start Ray training job on EKS',
+      lambdaFunction: startTrainingLambda,
+      resultPath: '$.trainingStartResult',
+    });
+
+    const checkStatusTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-check-status-task`);
+    const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
+      stateName: `${modelTrainingStageName}-check-status`,
+      comment: 'Check Ray training job status',
+      lambdaFunction: checkTrainingStatusLambda,
+      resultPath: '$.trainingStatusResult',
+    });
+
+    // Create wait state
+    const waitStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-wait`);
+    const waitState = new sfn.Wait(this, waitStateId, {
+      time: sfn.WaitTime.duration(Duration.seconds(30)),
+    });
+
+    // Create success and failure states
+    const successStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-success`);
+    const successState = new sfn.Succeed(this, successStateId, {
+      comment: 'Model training completed successfully',
+    });
+
+    const failureStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-failed`);
+    const failureState = new sfn.Fail(this, failureStateId, {
+      error: 'ModelTrainingFailed',
+      cause: 'Ray training job failed',
+      comment: 'Model training stage encountered an error',
+    });
+
+    // Create a choice state to check job status
+    const jobStatusChoiceId = DefaultIdBuilder.build(`${modelTrainingStageName}-job-complete-choice`);
+    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
+      stateName: `${modelTrainingStageName} finished?`,
+    })
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'SUCCESS'), successState)
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState)
+      .otherwise(waitState);
+
+    // Connect wait state back to check status task
+    waitState.next(checkStatusTask);
+
+    // Build the training workflow
+    const trainingTask = startTrainingTask
+      .next(checkStatusTask)
+      .next(jobStatusChoice);
+
+    this.workflow = sfn.Chain.start(trainingTask);
+  }
+
+  private createTaskRole(props: ModelTrainingStageProps): iam.Role {
+    const taskRoleId = DefaultIdBuilder.build('ray-training-task-role');
+    const taskRole = new iam.Role(this, taskRoleId, {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+
+    // Grant S3 access
+    props.dataLakeStack.goldBucket.grantRead(taskRole);
+    props.dataLakeStack.artifactsBucket.grantReadWrite(taskRole);
+
+    // Grant DynamoDB access for model registry
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:Query',
+        'dynamodb:Scan',
+      ],
+      resources: [`arn:aws:dynamodb:${Stack.of(this).region}:${Stack.of(this).account}:table/${props.modelRegistryTable}`],
+    }));
+
+    // Grant EKS access for Ray cluster management
+    taskRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'eks:DescribeCluster',
+        'eks:ListPods',
+        'eks:DescribePod',
+        'eks:CreatePod',
+        'eks:DeletePod',
+      ],
+      resources: ['*'],
+    }));
+
+    return taskRole;
+  }
+}
