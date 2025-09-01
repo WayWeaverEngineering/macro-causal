@@ -105,9 +105,9 @@ export class ModelTrainingStage extends Construct {
       runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
       timeout: Duration.minutes(1),
       environment: {
-        EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
-        RAY_NAMESPACE: rayCluster.rayNamespace,
-      },
+        ECS_CLUSTER_ARN: ecsCluster.clusterArn,
+        AWS_REGION: Stack.of(this).region,
+      },  
       layers: [
         props.commonUtilsLambdaLayer,
         props.ecsLambdaLayer,

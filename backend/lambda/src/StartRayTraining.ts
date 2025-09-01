@@ -57,13 +57,6 @@ export const handler = async (
       cluster: ECS_CLUSTER_ARN,
       taskDefinition: TASK_DEFINITION_ARN,
       launchType: 'FARGATE' as const,
-      networkConfiguration: {
-        awsvpcConfiguration: {
-          subnets: ['subnet-12345678', 'subnet-87654321'], // These should be passed as environment variables
-          securityGroups: ['sg-12345678'], // This should be passed as environment variables
-          assignPublicIp: 'ENABLED' as const,
-        },
-      },
       overrides: {
         containerOverrides: [
           {
