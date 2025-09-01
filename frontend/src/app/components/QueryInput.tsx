@@ -160,7 +160,7 @@ export const QueryInput = () => {
             }),
           }}
         >
-          {isExecuting ? (currentStep ? `Executing: ${currentStep.stepName}` : 'Analyzing...') : 'Analyze Causally'}
+          {isExecuting ? (currentStep ? `Executing: ${currentStep.stepName}` : 'Analyzing...') : 'Analyze'}
         </Button>
 
         <Typography variant="body2" sx={{ color: isExecuting ? '#90caf9' : '#888' }}>
