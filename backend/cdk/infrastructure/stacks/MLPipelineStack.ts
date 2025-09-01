@@ -46,9 +46,9 @@ export class MLPipelineStack extends Stack {
 
     // Chain all stages together
     const mlWorkflow = sfn.Chain
-      .start(dataCollectionStage.workflow)
+      .start(dataCollectionStage)
       .next(dataProcessingStage)
-      .next(modelTrainingStage.workflow);
+      .next(modelTrainingStage);
 
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');

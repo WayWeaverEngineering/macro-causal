@@ -20,11 +20,15 @@ export interface ModelTrainingStageProps {
   modelRegistryTable: string;
 }
 
-export class ModelTrainingStage extends Construct {
-  readonly workflow: sfn.Chain;
+export class ModelTrainingStage extends Construct implements sfn.IChainable {
+  readonly id: string;
+  readonly startState: sfn.State;
+  readonly endStates: sfn.INextable[];
 
   constructor(scope: Construct, id: string, props: ModelTrainingStageProps) {
     super(scope, id);
+
+    this.id = id;
 
     const modelTrainingStageName = 'model-training';
 
@@ -174,6 +178,15 @@ export class ModelTrainingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
+    // Connect wait state back to check status task
+    waitState.next(checkStatusTask);
+
+    const successStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-success`);
+    const successState = new sfn.Pass(this, successStateId, {
+      stateName: `${modelTrainingStageName} succeeded`,
+      comment: 'Model training stage finished successfully',
+    });
+
     const failureStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-failed`);
     const failureState = new sfn.Fail(this, failureStateId, {
       error: 'ModelTrainingFailed',
@@ -186,16 +199,15 @@ export class ModelTrainingStage extends Construct {
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${modelTrainingStageName} finished?`,
     })
-      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'RUNNING'), waitState)
-      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState);
-
-    // Connect wait state back to check status task
-    waitState.next(checkStatusTask);
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'SUCCESS'), successState)
+      .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState)
+      .otherwise(waitState);
 
     // Build the training workflow
-    this.workflow = startTrainingTask
-      .next(checkStatusTask)
-      .next(jobStatusChoice);
+    startTrainingTask.next(checkStatusTask).next(jobStatusChoice);
+
+    this.startState = startTrainingTask;
+    this.endStates = [successState];
   }
 
   private createTaskRole(props: ModelTrainingStageProps): iam.Role {

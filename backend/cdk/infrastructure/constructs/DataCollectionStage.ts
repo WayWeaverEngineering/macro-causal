@@ -13,12 +13,16 @@ export interface DataCollectionStageProps {
   dataLakeStack: DataLakeStack;
 }
 
-export class DataCollectionStage extends Construct {
+export class DataCollectionStage extends Construct implements sfn.IChainable {
 
-  readonly workflow: sfn.Chain;
+  readonly id: string;
+  readonly startState: sfn.State;
+  readonly endStates: sfn.INextable[];
 
   constructor(scope: Construct, id: string, props: DataCollectionStageProps) {
     super(scope, id);
+
+    this.id = id;
 
     const dataCollectionStageName = 'data-collection';
     const dataCollectionEcsId = DefaultIdBuilder.build(`${dataCollectionStageName}-ecs`);
@@ -77,6 +81,7 @@ export class DataCollectionStage extends Construct {
       resultPath: '$.dataCollectionResult'
     });
 
-    this.workflow = sfn.Chain.start(dataCollectionTask)
+    this.startState = dataCollectionTask;
+    this.endStates = [dataCollectionTask];
   }
 }
