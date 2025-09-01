@@ -47,13 +47,8 @@ export class MLPipelineStack extends Stack {
     // Chain all stages together
     const mlWorkflow = sfn.Chain
       .start(dataCollectionStage.workflow)
-      .next(dataProcessingStage.workflow);
-
-    // Because the last state of data processing stage is a choice state,
-    // we can't directly chain the model training stage to it using .next().
-    // Rather we'll have to use our own custom function to chain the next stage
-    // to the success condition of the choice state of data processing stage.
-    dataProcessingStage.addNextStepOnSuccess(modelTrainingStage.workflow)
+      .next(dataProcessingStage.workflow)
+      .next(modelTrainingStage.workflow);
 
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');

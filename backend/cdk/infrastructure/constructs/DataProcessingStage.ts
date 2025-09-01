@@ -11,7 +11,6 @@ import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { Duration } from 'aws-cdk-lib';
 import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
-import { ModelTrainingStage } from "./ModelTrainingStage";
 
 export interface DataProcessingStageProps {
   dataLakeStack: DataLakeStack;
@@ -148,6 +147,11 @@ export class DataProcessingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
+    const successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
+      stateName: `${dataProcessingStageName} succeeded`,
+      comment: 'Data processing stage finished successfully'
+    });
+
     const failureState = new sfn.Fail(this, `${dataProcessingStageName}-failed`, {
       error: 'DataProcessingFailed',
       cause: 'EMR job failed',
@@ -158,7 +162,8 @@ export class DataProcessingStage extends Construct {
     const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
     this.jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
-    }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState);
+    }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState);
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
@@ -169,9 +174,5 @@ export class DataProcessingStage extends Construct {
       .next(this.jobStatusChoice);
 
     this.workflow = sfn.Chain.start(dataProcessingTask);
-  }
-
-  public addNextStepOnSuccess(nextStep: sfn.IChainable) {
-    this.jobStatusChoice.when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), nextStep);
   }
 }
