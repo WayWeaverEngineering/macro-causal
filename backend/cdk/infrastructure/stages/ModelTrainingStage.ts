@@ -160,7 +160,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Create Step Functions tasks
     const startTrainingTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-start-task`);
     const startTrainingTask = new tasks.LambdaInvoke(this, startTrainingTaskId, {
-      stateName: `${modelTrainingStageName}-start`,
+      stateName: "Start Ray EKS training job",
       comment: 'Start Ray training job on EKS',
       lambdaFunction: startTrainingLambda,
       resultPath: '$.trainingStartResult',
@@ -168,7 +168,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
 
     const checkStatusTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-check-status-task`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
-      stateName: `Polling Ray Training Job`,
+      stateName: "Polling Ray EKS job status",
       comment: 'Check Ray training job status',
       lambdaFunction: checkTrainingStatusLambda,
       resultPath: '$.trainingStatusResult',
@@ -177,7 +177,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Create wait state
     const waitStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
-      stateName: `Waiting for Ray Training Job`,
+      stateName: "Waiting for Ray EKS job to complete",
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
@@ -186,21 +186,20 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
 
     const successStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-success`);
     const successState = new sfn.Pass(this, successStateId, {
-      stateName: `${modelTrainingStageName} succeeded`,
+      stateName: "Model training stage succeeded",
       comment: 'Model training stage finished successfully',
     });
 
     const failureStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-failed`);
     const failureState = new sfn.Fail(this, failureStateId, {
-      error: 'ModelTrainingFailed',
-      cause: 'Ray training job failed',
+      stateName: "Model training stage failed",
       comment: 'Model training stage encountered an error',
     });
 
     // Create a choice state to check job status
     const jobStatusChoiceId = DefaultIdBuilder.build(`${modelTrainingStageName}-job-complete-choice`);
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
-      stateName: `${modelTrainingStageName} finished?`,
+      stateName: "Ray EKS job status?",
     })
       .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'SUCCESS'), successState)
       .when(sfn.Condition.stringEquals('$.trainingStatusResult.Payload.status', 'FAILED'), failureState)

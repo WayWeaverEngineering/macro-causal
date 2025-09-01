@@ -71,7 +71,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     // Create ECS task for model serving initialization
     const modelServingTaskId = DefaultIdBuilder.build(`${modelServingStageName}-task`);
     const modelServingTask = new tasks.EcsRunTask(this, modelServingTaskId, {
-      stateName: modelServingStageName,
+      stateName: "Deploying model serving service",
       comment: "Initialize model serving service and load models",
       cluster: modelServingService.service.cluster,
       taskDefinition: modelServingService.service.taskDefinition,

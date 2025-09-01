@@ -124,7 +124,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Task to start EMR job
     const startJobTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-start-job`);
     const startJobTask = new tasks.LambdaInvoke(this, startJobTaskId, {
-      stateName: `Start ${dataProcessingStageName} Spark Job`,
+      stateName: "Start data processing Spark job",
       lambdaFunction: startJobLambda,
       payload: sfn.TaskInput.fromObject({
         executionId: sfn.JsonPath.stringAt('$$.Execution.Id'),
@@ -136,7 +136,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Task to check job status
     const checkStatusTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-check-status`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
-      stateName: `Polling ${dataProcessingStageName} Spark Job`,
+      stateName: "Polling Spark job status",
       lambdaFunction: checkStatusLambda,
       payload: sfn.TaskInput.fromObject({
         jobRunId: sfn.JsonPath.stringAt('$.jobInfo.Payload.jobRunId')
@@ -147,28 +147,29 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Wait state before checking status
     const waitStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
-      stateName: `Waiting for ${dataProcessingStageName} Spark Job`,
+      stateName: "Waiting for Spark job to complete",
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
 
-    const successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
-      stateName: `${dataProcessingStageName} succeeded`,
+    const successStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-success`);
+    const successState = new sfn.Pass(this, successStateId, {
+      stateName: "Data processing stage succeeded",
       comment: 'Data processing stage finished successfully'
     });
 
-    const failureState = new sfn.Fail(this, `${dataProcessingStageName}-failed`, {
-      error: 'DataProcessingFailed',
-      cause: 'EMR job failed',
+    const failureStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-failed`);
+    const failureState = new sfn.Fail(this, failureStateId, {
+      stateName: "Data processing stage failed",
       comment: 'Data processing stage encountered an error'
     });
 
     // Create a choice state to check job status
     const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
-      stateName: `${dataProcessingStageName} finished?`
+      stateName: "Spark job status?"
     }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
       .otherwise(waitState);

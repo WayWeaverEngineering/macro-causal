@@ -53,7 +53,7 @@ export class DataCollectionStage extends Construct implements sfn.IChainable {
 
     const dataCollectionTaskId = DefaultIdBuilder.build(`${dataCollectionStageName}-task`);
     const dataCollectionTask = new tasks.EcsRunTask(this, dataCollectionTaskId, {
-      stateName: dataCollectionStageName,
+      stateName: "Collecting training data",
       comment: "Data collection using Dockerized Python application on ECS Fargate",
       cluster: dataCollectionEcs.service.cluster,
       taskDefinition: dataCollectionEcs.service.taskDefinition,
