@@ -146,6 +146,9 @@ export class DataProcessingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
+    // Connect wait state back to check status task
+    waitState.next(checkStatusTask);
+
     const successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
       stateName: `${dataProcessingStageName} succeeded`,
       comment: 'Data processing stage finished successfully'
@@ -158,19 +161,19 @@ export class DataProcessingStage extends Construct {
     });
 
     // Create a choice state to check job status
-    const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
-    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
+    const jobSuccessChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-success-choice`);
+    const jobSuccessChoice = new sfn.Choice(this, jobSuccessChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
     }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
-      .otherwise(waitState);
+      .otherwise(successState);
 
-    // Connect wait state back to check status task
-    waitState.next(checkStatusTask);
 
-    // Build the job monitoring workflow
-    this.workflow = startJobTask
-      .next(checkStatusTask)
-      .next(jobStatusChoice.afterwards());
+    const waitForJobChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-wait-choice`);
+    const waitForJobChoice = new sfn.Choice(this, waitForJobChoiceId, {
+      stateName: `Waiting for ${dataProcessingStageName} Spark Job`,
+    }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'RUNNING'), waitState)
+      .otherwise(jobSuccessChoice.afterwards());
+
+    this.workflow = startJobTask.next(checkStatusTask).next(waitForJobChoice);
   }
 }
