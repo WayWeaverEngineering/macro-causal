@@ -18,6 +18,8 @@
     "@aws-sdk/client-ecs": "3.879.0",
     "@wayweaver/aws-secrets": "3.3.0",
     "@wayweaver/lambda-utils": "4.1.0",
+    "@langchain/langgraph": "^0.2.73",
+    "@langchain/openai": "^0.5.11",
     "axios": "^1.7.9",
     "jsdom": "^24.0.0"
   },
