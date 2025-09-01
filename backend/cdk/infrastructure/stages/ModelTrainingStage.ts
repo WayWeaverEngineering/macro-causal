@@ -74,11 +74,11 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       allowAllOutbound: true, // Needed for VPC endpoints, ECR, CW Logs, etc.
     });
 
-    // Select the PRIVATE_ISOLATED subnets
-    // These subnets have no NAT gateways and rely on VPC endpoints for AWS service access
-    // This ensures Fargate tasks can reach the private EKS API endpoint
-    const isolatedSubnetIds = ecsCluster.vpc.selectSubnets({
-      subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+    // Select the PUBLIC subnets
+    // These subnets have internet access through the Internet Gateway
+    // This ensures Fargate tasks can reach the public EKS API endpoint and pull images from ECR
+    const publicSubnetIds = ecsCluster.vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PUBLIC,
     }).subnetIds;
 
     // Create ECS task definition for Ray training
@@ -101,9 +101,9 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
           GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
           ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
           MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
-          SUBNET_IDS: isolatedSubnetIds.join(','),
+          SUBNET_IDS: publicSubnetIds.join(','),
           SECURITY_GROUP_IDS: taskSg.securityGroupId,
-          ASSIGN_PUBLIC_IP: 'DISABLED', // private isolated subnets → no public IP
+          ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
         },
     });
 
@@ -139,9 +139,9 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       timeout: Duration.minutes(1),
       environment: {
         ECS_CLUSTER_ARN: ecsCluster.clusterArn,
-        SUBNET_IDS: isolatedSubnetIds.join(','),
+        SUBNET_IDS: publicSubnetIds.join(','),
         SECURITY_GROUP_IDS: taskSg.securityGroupId,
-        ASSIGN_PUBLIC_IP: 'DISABLED', // private isolated subnets → no public IP
+        ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },  
       layers: [
         props.commonUtilsLambdaLayer,

@@ -24,67 +24,46 @@ export class EksRayClusterConstruct extends Construct {
   constructor(scope: Construct, id: string, props: EksRayClusterProps) {
     super(scope, id);
 
-    // We'll explicitly create a VPC with no NAT gateways
-    // to avoid going over address limit
+    // Create VPC with 2 AZs and no NAT gateways for cost efficiency
+    // EKS requires subnets from at least two AZs
     const eksClusterVpcId = DefaultIdBuilder.build('eks-cluster-vpc');
     const vpc = new ec2.Vpc(this, eksClusterVpcId, {
-      maxAzs: 1,
-      natGateways: 0,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/21'), // Keep VPC small; adjust if you need more IPs
+      maxAzs: 2,          // CRITICAL: EKS needs at least 2 AZs
+      natGateways: 0,     // no NATs, no extra EIPs
       subnetConfiguration: [
         {
-          name: 'public',
+          name: 'public-a-b',
           subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 20, // 4096 IPs, 4091 usable IPs (should be more than good enough)
+          cidrMask: 24,   // smaller public subnets to conserve IPs
         },
-        {
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-          cidrMask: 20, // 4096 IPs, 4091 usable IPs (should be more than good enough)
-        },
+        // Optional: add isolated subnets later if needed
+        // {
+        //   name: 'isolated-a-b',
+        //   subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        //   cidrMask: 24,
+        // },
       ],
     });
 
-    // Gateway: S3 (image layers via ECR to S3)
-    vpc.addGatewayEndpoint('S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-      // route tables are auto-selected for private subnets
-    });
-
-    // Interface endpoints needed by EKS nodes in isolated subnets
-    const ifaceSvcs = [
-      ec2.InterfaceVpcEndpointAwsService.EKS,              // EKS API
-      ec2.InterfaceVpcEndpointAwsService.STS,              // token exchange
-      ec2.InterfaceVpcEndpointAwsService.EC2,              // describe calls, IMDS fallback
-      ec2.InterfaceVpcEndpointAwsService.ECR,              // ECR API
-      ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,       // ECR Docker registry
-      ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,  // logs
-    ] as const;
-
-    ifaceSvcs.forEach((service) => {
-      vpc.addInterfaceEndpoint(`Ep-${service.shortName}`, {
-        service,
-        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-      });
-    });
-
-    // Create EKS cluster
+    // Create EKS cluster using public subnets across both AZs
     const clusterId = DefaultIdBuilder.build('ray-cluster');
     this.cluster = new eks.Cluster(this, clusterId, {
       vpc,
       version: eks.KubernetesVersion.V1_28,
       defaultCapacity: 0,
       clusterName: `${props.name}-ray-cluster`,
-      // Private endpoint: reachable from nodes & from within VPC
-      endpointAccess: eks.EndpointAccess.PRIVATE,
+      // Public endpoint: reachable from internet and from within VPC
+      endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
       kubectlLayer: new KubectlV28Layer(this, DefaultIdBuilder.build('kubectl-v28-layer')),
-      // Ensure all cluster-managed resources land in private subnets
-      vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
+      // Ensure all cluster-managed resources land in public subnets
+      vpcSubnets: [{ subnetType: ec2.SubnetType.PUBLIC }], // spans both AZs automatically
     });
 
-    // Add system node group for control plane add-ons
+    // Add system node group for control plane add-ons in public subnets
     const systemNodeGroupId = DefaultIdBuilder.build('system-node-group');
     this.cluster.addNodegroupCapacity(systemNodeGroupId, {
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      subnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE)],
       minSize: 1,
       desiredSize: 1,
@@ -92,10 +71,10 @@ export class EksRayClusterConstruct extends Construct {
       labels: { 'system': 'true' },
     });
 
-    // Add Ray worker node group
+    // Add Ray worker node group in public subnets
     const rayNodeGroupId = DefaultIdBuilder.build('ray-node-group');
     this.cluster.addNodegroupCapacity(rayNodeGroupId, {
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      subnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceTypes: [
         ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
         ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.XLARGE),
