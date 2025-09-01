@@ -157,10 +157,10 @@ export class DataProcessingStage extends Construct {
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-      .otherwise(checkStatusTask);
+      .otherwise(waitState);
 
     // Connect wait state back to check status task
-    waitState.next(jobStatusChoice);
+    waitState.next(checkStatusTask);
 
     // Build the job monitoring workflow
     const dataProcessingTask = startJobTask
