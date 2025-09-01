@@ -164,6 +164,11 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       comment: 'Start Ray training job on EKS',
       lambdaFunction: startTrainingLambda,
       resultPath: '$.trainingStartResult',
+      // Pass the execution ID from the Step Functions execution context
+      payload: sfn.TaskInput.fromObject({
+        executionId: sfn.JsonPath.stringAt('$$.Execution.Id'),
+        executionStartTime: sfn.JsonPath.stringAt('$$.Execution.StartTime')
+      })
     });
 
     const checkStatusTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-check-status-task`);
@@ -172,6 +177,11 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       comment: 'Check Ray training job status',
       lambdaFunction: checkTrainingStatusLambda,
       resultPath: '$.trainingStatusResult',
+      // Pass the task ARN from the previous stage result
+      payload: sfn.TaskInput.fromObject({
+        taskArn: sfn.JsonPath.stringAt('$.trainingStartResult.Payload.taskArn'),
+        executionId: sfn.JsonPath.stringAt('$$.Execution.Id')
+      })
     });
 
     // Create wait state

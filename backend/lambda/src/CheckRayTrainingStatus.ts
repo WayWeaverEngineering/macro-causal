@@ -20,16 +20,26 @@ const {
 ]);
 
 export const handler = async (
-  event: APIGatewayProxyEvent | CheckRayTrainingStatusRequest,
+  event: APIGatewayProxyEvent | CheckRayTrainingStatusRequest | any,
   context: Context
 ): Promise<APIGatewayProxyResult | CheckRayTrainingStatusResponse> => {
   console.log('Checking Ray training job status handler');
   console.log('Event:', JSON.stringify(event, null, 2));
 
   try {
-    // Extract data from event
-    const requestData = 'body' in event ? JSON.parse(event.body || '{}') : event;
-    const { taskArn } = requestData;
+    // Extract data from event - handle different input formats
+    let taskArn: string;
+    
+    if ('body' in event && event.body) {
+      // API Gateway event
+      const requestData = JSON.parse(event.body || '{}');
+      taskArn = requestData.taskArn;
+    } else if (event.taskArn) {
+      // Direct lambda invocation or Step Functions payload
+      taskArn = event.taskArn;
+    } else {
+      throw new Error('taskArn is required');
+    }
     
     if (!taskArn) {
       throw new Error('taskArn is required');

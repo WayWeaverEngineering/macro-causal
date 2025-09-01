@@ -7,6 +7,11 @@ interface StartRayTrainingRequest {
   executionStartTime?: string;
 }
 
+interface StepFunctionsPayload {
+  executionId: string;
+  executionStartTime?: string;
+}
+
 interface StartRayTrainingResponse {
   taskArn: string;
   status: string;
@@ -33,7 +38,7 @@ const {
 ]);
 
 export const handler = async (
-  event: APIGatewayProxyEvent | StartRayTrainingRequest,
+  event: APIGatewayProxyEvent | StartRayTrainingRequest | StepFunctionsPayload,
   context: Context
 ): Promise<APIGatewayProxyResult | StartRayTrainingResponse> => {
   console.log('Starting Ray training job handler');
