@@ -1,13 +1,15 @@
 import { Stack, Duration, RemovalPolicy } from "aws-cdk-lib";
+import * as path from 'path';
 import { Construct } from "constructs";
 import { DefaultIdBuilder } from "../../utils/Naming";
 import { Queue } from "aws-cdk-lib/aws-sqs";
-import { Function, Runtime, Code, Architecture } from "aws-cdk-lib/aws-lambda";
+import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import { RestApi, LambdaIntegration, Cors } from "aws-cdk-lib/aws-apigateway";
 import { Role, ServicePrincipal, ManagedPolicy } from "aws-cdk-lib/aws-iam";
 import { Table, AttributeType, BillingMode, ProjectionType } from "aws-cdk-lib/aws-dynamodb";
-import { AWS_QUEUE_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME, LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME, OPEN_SEARCH_INTEGRATION_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from "@wayweaver/ariadne";
+import { AWS_QUEUE_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, DEFAULT_LAMBDA_NODEJS_RUNTIME, DEFAULT_QUEUE_TIMEOUT_MINS, DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME, LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME, OPEN_SEARCH_INTEGRATION_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from "@wayweaver/ariadne";
+import { LambdaConfig } from "../configs/LambdaConfig";
+import { AwsConfig } from "../configs/AwsConfig";
 
 export interface AnalysisStackProps {
   lambdaLayersStack: PrebuiltLambdaLayersStack;
@@ -16,10 +18,9 @@ export interface AnalysisStackProps {
 export class AnalysisStack extends Stack {
   public readonly analysisExecutionsTable: Table;
   public readonly analysisQueue: Queue;
-  public readonly analysisSchedulingLambda: Function;
-  public readonly analysisProcessorLambda: Function;
-  public readonly analysisStatusLambda: Function;
-  public readonly analysisApi: RestApi;
+  public readonly analysisSchedulingLambda: LambdaFunction;
+  public readonly analysisProcessorLambda: LambdaFunction;
+  public readonly analysisStatusLambda: LambdaFunction;
 
   constructor(scope: Construct, id: string, props: AnalysisStackProps) {
     super(scope, id);
@@ -54,7 +55,7 @@ export class AnalysisStack extends Stack {
     const queueId = DefaultIdBuilder.build('analysis-executions-queue');
     this.analysisQueue = new Queue(this, queueId, {
       queueName: queueId,
-      visibilityTimeout: Duration.seconds(300), // 5 minutes
+      visibilityTimeout: AwsConfig.QUEUE_TIMEOUT_MINS,
       retentionPeriod: Duration.days(14),
       deadLetterQueue: {
         queue: new Queue(this, DefaultIdBuilder.build('analysis-executions-dlq'), {
@@ -83,13 +84,12 @@ export class AnalysisStack extends Stack {
 
     // Create AnalysisSchedulingLambda
     const schedulingLambdaId = DefaultIdBuilder.build('analysis-scheduling-lambda');
-    this.analysisSchedulingLambda = new Function(this, schedulingLambdaId, {
+    this.analysisSchedulingLambda = new LambdaFunction(this, schedulingLambdaId, {
       functionName: schedulingLambdaId,
-      runtime: Runtime.NODEJS_18_X,
-      architecture: Architecture.ARM_64,
-      code: Code.fromAsset('../lambda/dist'),
+      runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
+      code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'AnalysisSchedulingLambda.handler',
-      timeout: Duration.seconds(30),
+      timeout: AwsConfig.QUEUE_TIMEOUT_MINS,
       memorySize: 256,
       role: lambdaRole,
       environment: {
@@ -111,13 +111,12 @@ export class AnalysisStack extends Stack {
 
     // Create AnalysisProcessorLambda
     const processorLambdaId = DefaultIdBuilder.build('analysis-processor-lambda');
-    this.analysisProcessorLambda = new Function(this, processorLambdaId, {
+    this.analysisProcessorLambda = new LambdaFunction(this, processorLambdaId, {
       functionName: processorLambdaId,
-      runtime: Runtime.NODEJS_18_X,
-      architecture: Architecture.ARM_64,
-      code: Code.fromAsset('../lambda/dist'),
+      runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
+      code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'AnalysisProcessorLambda.handler',
-      timeout: Duration.seconds(300), // 5 minutes
+      timeout: AwsConfig.QUEUE_TIMEOUT_MINS,
       memorySize: 1024,
       role: lambdaRole,
       environment: {
@@ -145,13 +144,12 @@ export class AnalysisStack extends Stack {
 
     // Create AnalysisStatusLambda
     const statusLambdaId = DefaultIdBuilder.build('analysis-status-lambda');
-    this.analysisStatusLambda = new Function(this, statusLambdaId, {
+    this.analysisStatusLambda = new LambdaFunction(this, statusLambdaId, {
       functionName: statusLambdaId,
-      runtime: Runtime.NODEJS_18_X,
-      architecture: Architecture.ARM_64,
-      code: Code.fromAsset('../lambda/dist'),
+      runtime: DEFAULT_LAMBDA_NODEJS_RUNTIME,
+      code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'AnalysisStatusLambda.handler',
-      timeout: Duration.seconds(30),
+      timeout: AwsConfig.QUEUE_TIMEOUT_MINS,
       memorySize: 256,
       role: lambdaRole,
       environment: {
@@ -165,37 +163,5 @@ export class AnalysisStack extends Stack {
 
     // Grant DynamoDB read permissions
     this.analysisExecutionsTable.grantReadData(this.analysisStatusLambda);
-
-    // Create API Gateway
-    const apiId = DefaultIdBuilder.build('analysis-api');
-    this.analysisApi = new RestApi(this, apiId, {
-      restApiName: apiId,
-      description: 'API for analysis operations',
-      defaultCorsPreflightOptions: {
-        allowOrigins: Cors.ALL_ORIGINS,
-        allowMethods: Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
-        maxAge: Duration.days(1)
-      }
-    });
-
-    // Create API resources and methods
-    const analysisResource = this.analysisApi.root.addResource('analysis');
-    
-    // POST /analysis - Schedule new analysis
-    analysisResource.addMethod('POST', new LambdaIntegration(this.analysisSchedulingLambda));
-    
-    // GET /analysis/{executionId} - Get analysis status
-    const executionResource = analysisResource.addResource('{executionId}');
-    executionResource.addMethod('GET', new LambdaIntegration(this.analysisStatusLambda));
-
-    // Output important values
-    this.exportValue(this.analysisQueue.queueUrl, {
-      name: DefaultIdBuilder.build('analysis-queue-url')
-    });
-
-    this.exportValue(this.analysisApi.url, {
-      name: DefaultIdBuilder.build('analysis-api-url')
-    });
   }
 }

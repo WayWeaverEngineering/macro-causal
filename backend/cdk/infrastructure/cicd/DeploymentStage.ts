@@ -12,6 +12,7 @@ import { DataLakeStack } from "../stacks/DataLakeStack";
 import { MLPipelineStack } from "../stacks/MLPipelineStack";
 import { ModelRegistryStack } from "../stacks/ModelRegistryStack";
 import { AnalysisStack } from "../stacks/AnalysisStack";
+import { BackendApiStack } from "../stacks/BackendApiStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -55,8 +56,15 @@ export class DeploymentStage extends Stage {
       lambdaLayersStack
     });
 
+    const backendApiStackId = DefaultIdBuilder.build('backend-api-stack');
+    const backendApiStack = new BackendApiStack(this, backendApiStackId, {
+      analysisStatusLambda: analysisStack.analysisStatusLambda,
+      analysisSchedulingLambda: analysisStack.analysisSchedulingLambda
+    });
+
     mlPipelineStack.addDependency(dataLakeStack);
     mlPipelineStack.addDependency(modelRegistryStack);
     analysisStack.addDependency(lambdaLayersStack);
+    backendApiStack.addDependency(analysisStack);
   }
 }
