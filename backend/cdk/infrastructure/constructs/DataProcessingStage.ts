@@ -105,7 +105,7 @@ export class DataProcessingStage extends Construct {
     // Task to start EMR job
     const startJobTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-start-job`);
     const startJobTask = new tasks.LambdaInvoke(this, startJobTaskId, {
-      stateName: `${dataProcessingStageName}-start-job`,
+      stateName: `Start ${dataProcessingStageName} EMR Spark Job`,
       lambdaFunction: startJobLambda,
       payload: sfn.TaskInput.fromObject({
         executionId: sfn.JsonPath.stringAt('$$.Execution.Id'),
@@ -117,7 +117,7 @@ export class DataProcessingStage extends Construct {
     // Task to check job status
     const checkStatusTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-check-status`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
-      stateName: `${dataProcessingStageName}-check-status`,
+      stateName: `Polling status of ${dataProcessingStageName} EMR Spark Job`,
       lambdaFunction: checkStatusLambda,
       payload: sfn.TaskInput.fromObject({
         jobRunId: sfn.JsonPath.stringAt('$.jobInfo.Payload.jobRunId')
@@ -142,10 +142,11 @@ export class DataProcessingStage extends Construct {
     });
 
     // Create a choice state to check job status
-    const jobStatusChoice = new sfn.Choice(this, DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete`))
+    const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
+    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-      .otherwise(waitState);
+      .otherwise(checkStatusTask);
 
     // Connect wait state back to check status task
     waitState.next(jobStatusChoice);
