@@ -44,12 +44,11 @@ export class MLPipelineStack extends Stack {
       modelRegistryTable: props.modelRegistryTable
     });
 
-    dataProcessingStage.successState.next(modelTrainingStage.workflow);
-
     // Chain all stages together
     const mlWorkflow = sfn.Chain
       .start(dataCollectionStage.workflow)
-      .next(dataProcessingStage.workflow);
+      .next(dataProcessingStage.workflow)
+      .next(modelTrainingStage.workflow);
 
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');
