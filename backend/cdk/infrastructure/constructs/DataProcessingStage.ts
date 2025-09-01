@@ -146,11 +146,6 @@ export class DataProcessingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
-    // Create success and failure states
-    const successState = new sfn.Succeed(this, `${dataProcessingStageName}-success`, {
-      comment: 'Data processing completed successfully'
-    });
-
     const failureState = new sfn.Fail(this, `${dataProcessingStageName}-failed`, {
       error: 'DataProcessingFailed',
       cause: 'EMR job failed',
@@ -162,9 +157,8 @@ export class DataProcessingStage extends Construct {
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
     })
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
-      .otherwise(waitState);
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'RUNNING'), waitState)
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState);
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);

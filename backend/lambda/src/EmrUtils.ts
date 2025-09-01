@@ -172,18 +172,20 @@ export class EMRServerlessManager {
    */
   getSimplifiedStatus(jobStatus: EMRJobStatus): string {
     switch (jobStatus.state) {
+      
+      case 'SUCCESS':
+        return 'SUCCESS';
+
+      case 'FAILED':
+      case 'CANCELLED':
+        return 'FAILED';
+        
       case 'SUBMITTED':
       case 'PENDING':
       case 'SCHEDULED':
       case 'RUNNING':
-        return 'RUNNING';
-      case 'SUCCESS':
-        return 'SUCCESS';
-      case 'FAILED':
-      case 'CANCELLED':
-        return 'FAILED';
       default:
-        return 'UNKNOWN';
+        return 'RUNNING';
     }
   }
 }

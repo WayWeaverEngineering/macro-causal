@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""
-Ray-based model training pipeline for macro causal inference.
-
-This script implements distributed training and hyperparameter tuning using Ray Train and Ray Tune
-for the macro causal inference model.
-"""
-
 import os
 import sys
 import argparse
@@ -273,6 +266,10 @@ def register_model_in_dynamodb(execution_id: str, model_metrics: Dict, model_uri
         raise
 
 def main():
+
+    # Eearly exit for testing
+    return 0
+    
     """Main training function with hyperparameter tuning."""
     parser = argparse.ArgumentParser(description='Ray-based model training for macro causal inference')
     parser.add_argument('--execution-id', required=True, help='Pipeline execution ID')
