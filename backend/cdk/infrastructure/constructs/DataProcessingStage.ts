@@ -95,7 +95,10 @@ export class DataProcessingStage extends Construct {
           'emr-serverless:ListJobRuns',
           'emr-serverless:TagResource'
         ],
-        resources: [emrCluster.application.attrArn]
+        resources: [
+          emrCluster.application.attrArn,
+          `${emrCluster.application.attrArn}/jobruns/*`
+        ]
       }));
     });
 
