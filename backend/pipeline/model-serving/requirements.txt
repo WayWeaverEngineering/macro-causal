@@ -3,10 +3,9 @@ numpy>=1.24.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
 
-# Deep learning frameworks (uncomment as needed)
-# torch>=2.1.0
-# tensorflow>=2.13.0
-# transformers>=4.30.0
+# Deep learning frameworks
+torch>=2.1.0
+econml>=0.14.1
 
 # AWS SDK
 boto3>=1.28.0
