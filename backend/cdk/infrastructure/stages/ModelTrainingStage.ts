@@ -93,6 +93,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       environment: {
         ECS_CLUSTER_ARN: ecsCluster.clusterArn,
         TASK_DEFINITION_ARN: taskDefinition.taskDefinitionArn,
+        CONTAINER_NAME: containerId, // Pass the actual container name
         EKS_CLUSTER_NAME: rayCluster.cluster.clusterName,
         RAY_NAMESPACE: rayCluster.rayNamespace,
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,

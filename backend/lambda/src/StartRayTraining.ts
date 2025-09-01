@@ -22,6 +22,7 @@ interface StartRayTrainingResponse {
 const {
   ECS_CLUSTER_ARN,
   TASK_DEFINITION_ARN,
+  CONTAINER_NAME,
   EKS_CLUSTER_NAME,
   RAY_NAMESPACE,
   GOLD_BUCKET,
@@ -30,6 +31,7 @@ const {
 } = loadEnvVars([
   'ECS_CLUSTER_ARN',
   'TASK_DEFINITION_ARN',
+  'CONTAINER_NAME',
   'EKS_CLUSTER_NAME',
   'RAY_NAMESPACE',
   'GOLD_BUCKET',
@@ -65,7 +67,7 @@ export const handler = async (
       overrides: {
         containerOverrides: [
           {
-            name: 'ray-training-container',
+            name: CONTAINER_NAME,
             environment: [
               { name: 'EXECUTION_ID', value: executionId },
               { name: 'EXECUTION_START_TIME', value: executionStartTime || new Date().toISOString() },
