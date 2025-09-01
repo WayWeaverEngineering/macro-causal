@@ -172,6 +172,6 @@ export class DataProcessingStage extends Construct {
     // Build the job monitoring workflow
     this.workflow = startJobTask
       .next(checkStatusTask)
-      .next(jobStatusChoice);
+      .next(jobStatusChoice.afterwards());
   }
 }
