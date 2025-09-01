@@ -5,6 +5,10 @@ import { ExecutionStep } from "./models/AgentModels";
 import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { AnalysisExecution, AnalysisMessage } from "./models/AnalysisModels";
 import { DbClient } from "./clients/DbClient";
+import { initializeUuidPolyfill } from "./utils/UuidPolyfill";
+
+// Initialize UUID polyfill to fix v6 function issue in older UUID versions
+initializeUuidPolyfill();
 
 // Helper function to remove undefined values from objects
 function removeUndefinedValues(obj: any): any {
