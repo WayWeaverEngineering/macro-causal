@@ -7,6 +7,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { DataProcessingStage } from '../stages/DataProcessingStage';
 import { ModelTrainingStage } from '../stages/ModelTrainingStage';
 import { AWS_CLIENT_ECS_LAMBDA_LAYER_NAME, AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
+import { ModelServingStage } from '../stages/ModelServingStage';
 
 export interface MLPipelineStackProps extends StackProps {
   dataLakeStack: DataLakeStack;
@@ -44,11 +45,18 @@ export class MLPipelineStack extends Stack {
       modelRegistryTable: props.modelRegistryTable
     });
 
+    const modelServingStageId = DefaultIdBuilder.build('model-serving-stage');
+    const modelServingStage = new ModelServingStage(this, modelServingStageId, {
+      dataLakeStack: props.dataLakeStack,
+      modelRegistryTable: props.modelRegistryTable
+    });
+
     // Chain all stages together
     const mlWorkflow = sfn.Chain
       .start(dataCollectionStage)
       .next(dataProcessingStage)
-      .next(modelTrainingStage);
+      .next(modelTrainingStage)
+      .next(modelServingStage);
 
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');

@@ -10,6 +10,7 @@ export interface EcsFargateServiceProps {
   memoryLimitMiB?: number;
   portMappings?: { containerPort: number }[];
   environment?: { [key: string]: string };
+  persistent?: boolean; // Flag to control if service runs continuously
 }
 
 export class EcsFargateServiceConstruct extends Construct {
@@ -49,7 +50,9 @@ export class EcsFargateServiceConstruct extends Construct {
 
     const serviceId = DefaultIdBuilder.build(`${props.name}-service`);
     this.service = new ecs.FargateService(this, serviceId, {
-      cluster, taskDefinition: task, desiredCount: 0, // Don't run continuously - Step Functions will trigger tasks
+      cluster, 
+      taskDefinition: task, 
+      desiredCount: props.persistent ? 1 : 0, // Run continuously if persistent, otherwise Step Functions will trigger tasks
       assignPublicIp: false,
     });
   }
