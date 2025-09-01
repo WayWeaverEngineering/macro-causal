@@ -4,7 +4,7 @@ import * as eks from 'aws-cdk-lib/aws-eks';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
 
@@ -23,18 +23,14 @@ export class EksRayClusterConstruct extends Construct {
   constructor(scope: Construct, id: string, props: EksRayClusterProps) {
     super(scope, id);
 
-    // Create EKS cluster with default VPC
+    // Create EKS cluster
     const clusterId = DefaultIdBuilder.build('ray-cluster');
     this.cluster = new eks.Cluster(this, clusterId, {
-      version: eks.KubernetesVersion.V1_27, // Fixed: use enum value directly
+      version: eks.KubernetesVersion.V1_28,
       defaultCapacity: 0, // We'll add node groups manually
       clusterName: `${props.name}-ray-cluster`,
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      kubectlLayer: new lambda.LayerVersion(this, 'KubectlLayer', {
-        code: lambda.Code.fromAsset('kubectl-layer'),
-        compatibleRuntimes: [lambda.Runtime.NODEJS_18_X],
-        description: 'Kubectl layer for EKS cluster',
-      }),
+      kubectlLayer: new KubectlV28Layer(this, DefaultIdBuilder.build('kubectl-v28-layer')),
     });
 
     // Add system node group for control plane add-ons
