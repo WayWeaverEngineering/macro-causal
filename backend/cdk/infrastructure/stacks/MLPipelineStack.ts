@@ -29,13 +29,6 @@ export class MLPipelineStack extends Stack {
     const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
     const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_ECS_LAMBDA_LAYER_NAME)
     
-    const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
-    const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
-      dataLakeStack: props.dataLakeStack,
-      commonUtilsLambdaLayer,
-      emrServerlessLambdaLayer
-    });
-
     const modelTrainingStageId = DefaultIdBuilder.build('model-training-stage');
     const modelTrainingStage = new ModelTrainingStage(this, modelTrainingStageId, {
       dataLakeStack: props.dataLakeStack,
@@ -44,8 +37,16 @@ export class MLPipelineStack extends Stack {
       modelRegistryTable: props.modelRegistryTable
     });
 
+    const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
+    const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
+      dataLakeStack: props.dataLakeStack,
+      modelTrainingStage,
+      commonUtilsLambdaLayer,
+      emrServerlessLambdaLayer
+    });
+
     // Chain all stages together
-    const workflow = sfn.Chain
+    const mlWorkflow = sfn.Chain
       .start(dataCollectionStage.workflow)
       .next(dataProcessingStage.workflow)
       .next(modelTrainingStage.workflow);
@@ -53,7 +54,7 @@ export class MLPipelineStack extends Stack {
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');
     this.pipelineStateMachine = new sfn.StateMachine(this, stateMachineId, {
-      definitionBody: sfn.DefinitionBody.fromChainable(workflow),
+      definitionBody: sfn.DefinitionBody.fromChainable(mlWorkflow),
       stateMachineName: stateMachineId,
       timeout: Duration.hours(24), // 24-hour timeout for entire pipeline
       comment: 'ML Pipeline for Macro Causal Analysis with Ray Training'

@@ -11,9 +11,11 @@ import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import { Duration } from 'aws-cdk-lib';
 import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
+import { ModelTrainingStage } from "./ModelTrainingStage";
 
 export interface DataProcessingStageProps {
   dataLakeStack: DataLakeStack;
+  modelTrainingStage: ModelTrainingStage;
   commonUtilsLambdaLayer: ILayerVersion;
   emrServerlessLambdaLayer: ILayerVersion;
 }
@@ -157,7 +159,7 @@ export class DataProcessingStage extends Construct {
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
     })
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'RUNNING'), waitState)
+      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), props.modelTrainingStage.workflow.startState)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState);
 
     // Connect wait state back to check status task
