@@ -160,7 +160,7 @@ export class ModelTrainingStage extends Construct {
 
     const checkStatusTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-check-status-task`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
-      stateName: `${modelTrainingStageName}-check-status`,
+      stateName: `Polling Ray Training Job`,
       comment: 'Check Ray training job status',
       lambdaFunction: checkTrainingStatusLambda,
       resultPath: '$.trainingStatusResult',
@@ -169,6 +169,7 @@ export class ModelTrainingStage extends Construct {
     // Create wait state
     const waitStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
+      stateName: `Waiting for Ray Training Job`,
       time: sfn.WaitTime.duration(Duration.seconds(30)),
     });
 
