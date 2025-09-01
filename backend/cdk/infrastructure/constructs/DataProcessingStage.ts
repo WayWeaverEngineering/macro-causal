@@ -18,11 +18,16 @@ export interface DataProcessingStageProps {
   emrServerlessLambdaLayer: ILayerVersion;
 }
 
-export class DataProcessingStage extends Construct {
-  readonly workflow: sfn.Chain;
+export class DataProcessingStage extends Construct implements sfn.IChainable {
+
+  readonly id: string;
+  readonly startState: sfn.State;
+  readonly endStates: sfn.INextable[];
 
   constructor(scope: Construct, id: string, props: DataProcessingStageProps) {
     super(scope, id);
+
+    this.id = id;
 
     const dataProcessingStageName = 'data-processing';
 
@@ -146,6 +151,9 @@ export class DataProcessingStage extends Construct {
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
+    // Connect wait state back to check status task
+    waitState.next(checkStatusTask);
+
     const successState = new sfn.Pass(this, `${dataProcessingStageName}-success`, {
       stateName: `${dataProcessingStageName} succeeded`,
       comment: 'Data processing stage finished successfully'
@@ -165,12 +173,10 @@ export class DataProcessingStage extends Construct {
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
       .otherwise(waitState);
 
-    // Connect wait state back to check status task
-    waitState.next(checkStatusTask);
-
     // Build the job monitoring workflow
-    this.workflow = startJobTask
-      .next(checkStatusTask)
-      .next(jobStatusChoice.afterwards());
+    startJobTask.next(checkStatusTask).next(jobStatusChoice);
+
+    this.startState = startJobTask;
+    this.endStates = [successState];
   }
 }

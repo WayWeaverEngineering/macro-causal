@@ -47,7 +47,7 @@ export class MLPipelineStack extends Stack {
     // Chain all stages together
     const mlWorkflow = sfn.Chain
       .start(dataCollectionStage.workflow)
-      .next(dataProcessingStage.workflow)
+      .next(dataProcessingStage)
       .next(modelTrainingStage.workflow);
 
     // Create the state machine
