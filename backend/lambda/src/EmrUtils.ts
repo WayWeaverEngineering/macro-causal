@@ -202,7 +202,7 @@ export function createDataProcessingJobConfig(
   return {
     applicationId,
     executionRoleArn,
-    entryPoint: `s3://${bronzeBucket}/processing-scripts/data_processing.py`,
+    entryPoint: '/opt/spark/work-dir/main.py',
     entryPointArguments: [
       '--bronze-bucket', bronzeBucket,
       '--silver-bucket', silverBucket,
