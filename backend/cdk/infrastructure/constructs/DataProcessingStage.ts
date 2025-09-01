@@ -15,13 +15,13 @@ import { ModelTrainingStage } from "./ModelTrainingStage";
 
 export interface DataProcessingStageProps {
   dataLakeStack: DataLakeStack;
-  modelTrainingStage: ModelTrainingStage;
   commonUtilsLambdaLayer: ILayerVersion;
   emrServerlessLambdaLayer: ILayerVersion;
 }
 
 export class DataProcessingStage extends Construct {
   readonly workflow: sfn.Chain;
+  readonly jobStatusChoice: sfn.Choice;
 
   constructor(scope: Construct, id: string, props: DataProcessingStageProps) {
     super(scope, id);
@@ -156,11 +156,9 @@ export class DataProcessingStage extends Construct {
 
     // Create a choice state to check job status
     const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
-    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
+    this.jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: `${dataProcessingStageName} finished?`
-    })
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), props.modelTrainingStage.workflow.startState)
-      .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState);
+    }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState);
 
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
@@ -168,8 +166,12 @@ export class DataProcessingStage extends Construct {
     // Build the job monitoring workflow
     const dataProcessingTask = startJobTask
       .next(checkStatusTask)
-      .next(jobStatusChoice);
+      .next(this.jobStatusChoice);
 
     this.workflow = sfn.Chain.start(dataProcessingTask);
+  }
+
+  public addNextStepOnSuccess(nextStep: sfn.IChainable) {
+    this.jobStatusChoice.when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), nextStep);
   }
 }

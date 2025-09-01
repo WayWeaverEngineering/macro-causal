@@ -29,6 +29,13 @@ export class MLPipelineStack extends Stack {
     const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
     const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_ECS_LAMBDA_LAYER_NAME)
     
+    const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
+    const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
+      dataLakeStack: props.dataLakeStack,
+      commonUtilsLambdaLayer,
+      emrServerlessLambdaLayer
+    });
+
     const modelTrainingStageId = DefaultIdBuilder.build('model-training-stage');
     const modelTrainingStage = new ModelTrainingStage(this, modelTrainingStageId, {
       dataLakeStack: props.dataLakeStack,
@@ -37,19 +44,16 @@ export class MLPipelineStack extends Stack {
       modelRegistryTable: props.modelRegistryTable
     });
 
-    const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
-    const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
-      dataLakeStack: props.dataLakeStack,
-      modelTrainingStage,
-      commonUtilsLambdaLayer,
-      emrServerlessLambdaLayer
-    });
-
     // Chain all stages together
     const mlWorkflow = sfn.Chain
       .start(dataCollectionStage.workflow)
-      .next(dataProcessingStage.workflow)
-      .next(modelTrainingStage.workflow);
+      .next(dataProcessingStage.workflow);
+
+    // Because the last state of data processing stage is a choice state,
+    // we can't directly chain the model training stage to it using .next().
+    // Rather we'll have to use our own custom function to chain the next stage
+    // to the success condition of the choice state of data processing stage.
+    dataProcessingStage.addNextStepOnSuccess(modelTrainingStage.workflow)
 
     // Create the state machine
     const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');
