@@ -137,7 +137,9 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         actions: [
           'iam:PassRole',
         ],
-        resources: [taskDefinition.taskRole.roleArn, taskDefinition.executionRole?.roleArn || ''],
+        resources: taskDefinition.executionRole ?
+          [taskDefinition.taskRole.roleArn, taskDefinition.executionRole.roleArn] :
+          [taskDefinition.taskRole.roleArn],
       }));
     });
 

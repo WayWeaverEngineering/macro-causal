@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { Stack, Duration, CfnOutput } from 'aws-cdk-lib';
+import { Stack } from 'aws-cdk-lib';
 import * as eks from 'aws-cdk-lib/aws-eks';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -125,10 +125,6 @@ export class EksRayClusterConstruct extends Construct {
 
     // Create Ray cluster manifest
     this.createRayClusterManifest(props);
-
-    // Add outputs
-    new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
-    new CfnOutput(this, 'RayNamespace', { value: this.rayNamespace });
   }
 
   private createNodeRole(): iam.Role {
