@@ -65,6 +65,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       cpu: 2048,
       memoryLimitMiB: 4096,
       taskRole: this.createTaskRole(props),
+      executionRole: this.createExecutionRole(),
     });
 
     // Add container to task definition
@@ -132,15 +133,16 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         resources: ['*'],
       }));
 
-      lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'iam:PassRole',
-        ],
-        resources: taskDefinition.executionRole ?
-          [taskDefinition.taskRole.roleArn, taskDefinition.executionRole.roleArn] :
-          [taskDefinition.taskRole.roleArn],
-      }));
+      const passRoleArns = [taskDefinition.taskRole.roleArn, taskDefinition.executionRole?.roleArn].filter(Boolean) as string[];
+      if (passRoleArns.length) {
+        lambdaFunc.addToRolePolicy(new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'iam:PassRole',
+          ],
+          resources: passRoleArns,
+        }));
+      }
     });
 
     // Grant EKS permissions to Lambda functions
@@ -149,8 +151,6 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         effect: iam.Effect.ALLOW,
         actions: [
           'eks:DescribeCluster',
-          'eks:ListPods',
-          'eks:DescribePod',
         ],
         resources: [rayCluster.cluster.clusterArn],
       }));
@@ -241,14 +241,22 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       effect: iam.Effect.ALLOW,
       actions: [
         'eks:DescribeCluster',
-        'eks:ListPods',
-        'eks:DescribePod',
-        'eks:CreatePod',
-        'eks:DeletePod',
       ],
       resources: ['*'],
     }));
 
     return taskRole;
+  }
+
+  private createExecutionRole(): iam.Role {
+    const executionRoleId = DefaultIdBuilder.build('ray-training-execution-role');
+    const executionRole = new iam.Role(this, executionRoleId, {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy'),
+      ],
+    });
+
+    return executionRole;
   }
 }

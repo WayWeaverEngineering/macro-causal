@@ -64,8 +64,15 @@ export class EksRayClusterConstruct extends Construct {
       taints: [], // No taints for now
     });
 
-    // Create Ray namespace
+    // Create Ray namespace string stays as-is
     this.rayNamespace = 'ray';
+
+    // Create the Kubernetes Namespace manifest (move it here from createRayClusterManifest)
+    const rayNamespace = this.cluster.addManifest('RayNamespace', {
+      apiVersion: 'v1',
+      kind: 'Namespace',
+      metadata: { name: this.rayNamespace },
+    });
 
     // Install KubeRay operator via Helm
     new eks.HelmChart(this, 'KubeRayOperator', {
@@ -77,15 +84,22 @@ export class EksRayClusterConstruct extends Construct {
       version: '1.4.2',
     });
 
-    // Create Ray service account with IRSA
-    this.rayServiceAccount = this.createRayServiceAccount(props);
+    // Create ServiceAccount with IRSA handled by CDK
+    const raySa = this.cluster.addServiceAccount('RaySa', {
+      name: 'ray-service-account',
+      namespace: this.rayNamespace,
+    });
+    raySa.node.addDependency(rayNamespace); // ensure NS exists before SA
+
+    // Keep the field name; assign the IAM Role behind the SA
+    this.rayServiceAccount = raySa.role as iam.Role;
 
     // Grant S3 access to Ray service account
-    props.goldBucket.grantRead(this.rayServiceAccount);
-    props.artifactsBucket.grantReadWrite(this.rayServiceAccount);
+    props.goldBucket.grantRead(raySa.role);
+    props.artifactsBucket.grantReadWrite(raySa.role);
 
     // Add DynamoDB permissions for model registry
-    this.rayServiceAccount.addToPolicy(new iam.PolicyStatement({
+    (raySa.role as iam.Role).addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'dynamodb:GetItem',
@@ -99,7 +113,7 @@ export class EksRayClusterConstruct extends Construct {
     }));
 
     // Add ECR permissions for pulling training images
-    this.rayServiceAccount.addToPolicy(new iam.PolicyStatement({
+    (raySa.role as iam.Role).addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'ecr:GetAuthorizationToken',
@@ -111,7 +125,7 @@ export class EksRayClusterConstruct extends Construct {
     }));
 
     // Add CloudWatch permissions for logging
-    this.rayServiceAccount.addToPolicy(new iam.PolicyStatement({
+    (raySa.role as iam.Role).addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
         'logs:CreateLogGroup',
@@ -124,7 +138,7 @@ export class EksRayClusterConstruct extends Construct {
     }));
 
     // Create Ray cluster manifest
-    this.createRayClusterManifest(props);
+    this.createRayClusterManifest(props, rayNamespace, raySa);
   }
 
   private createNodeRole(): iam.Role {
@@ -142,25 +156,7 @@ export class EksRayClusterConstruct extends Construct {
     return nodeRole;
   }
 
-  private createRayServiceAccount(props: EksRayClusterProps): iam.Role {
-    const serviceAccountId = DefaultIdBuilder.build('ray-service-account');
-    const serviceAccount = new iam.Role(this, serviceAccountId, {
-      assumedBy: new iam.FederatedPrincipal(
-        this.cluster.openIdConnectProvider.openIdConnectProviderArn,
-        {
-          StringEquals: {
-            [`${this.cluster.openIdConnectProvider.openIdConnectProviderIssuer}:aud`]: 'sts.amazonaws.com',
-            [`${this.cluster.openIdConnectProvider.openIdConnectProviderIssuer}:sub`]: `system:serviceaccount:${this.rayNamespace}:ray-service-account`,
-          },
-        },
-        'sts:AssumeRoleWithWebIdentity'
-      ),
-    });
-
-    return serviceAccount;
-  }
-
-  private createRayClusterManifest(props: EksRayClusterProps): void {
+  private createRayClusterManifest(props: EksRayClusterProps, rayNamespace: eks.KubernetesManifest, raySa: eks.ServiceAccount): void {
     // Create Ray cluster manifest
     const rayCluster = this.cluster.addManifest('RayCluster', {
       apiVersion: 'ray.io/v1',
@@ -229,30 +225,8 @@ export class EksRayClusterConstruct extends Construct {
       }
     });
 
-    // Create Ray service account in Kubernetes
-    const rayServiceAccount = this.cluster.addManifest('RayServiceAccount', {
-      apiVersion: 'v1',
-      kind: 'ServiceAccount',
-      metadata: {
-        name: 'ray-service-account',
-        namespace: this.rayNamespace,
-        annotations: {
-          'eks.amazonaws.com/role-arn': this.rayServiceAccount.roleArn,
-        },
-      },
-    });
-
-    // Create Ray namespace
-    const rayNamespace = this.cluster.addManifest('RayNamespace', {
-      apiVersion: 'v1',
-      kind: 'Namespace',
-      metadata: {
-        name: this.rayNamespace,
-      },
-    });
-
-    // Set dependencies
-    rayCluster.node.addDependency(rayServiceAccount);
+    // Ensure ordering
     rayCluster.node.addDependency(rayNamespace);
+    rayCluster.node.addDependency(raySa);
   }
 }
