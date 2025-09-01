@@ -116,7 +116,7 @@ export class DataProcessingStage extends Construct {
     // Task to start EMR job
     const startJobTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-start-job`);
     const startJobTask = new tasks.LambdaInvoke(this, startJobTaskId, {
-      stateName: `Start ${dataProcessingStageName} EMR Spark Job`,
+      stateName: `Start ${dataProcessingStageName} Spark Job`,
       lambdaFunction: startJobLambda,
       payload: sfn.TaskInput.fromObject({
         executionId: sfn.JsonPath.stringAt('$$.Execution.Id'),
@@ -128,7 +128,7 @@ export class DataProcessingStage extends Construct {
     // Task to check job status
     const checkStatusTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-check-status`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
-      stateName: `Polling status of ${dataProcessingStageName} EMR Spark Job`,
+      stateName: `Polling ${dataProcessingStageName} Spark Job`,
       lambdaFunction: checkStatusLambda,
       payload: sfn.TaskInput.fromObject({
         jobRunId: sfn.JsonPath.stringAt('$.jobInfo.Payload.jobRunId')
@@ -137,7 +137,9 @@ export class DataProcessingStage extends Construct {
     });
 
     // Wait state before checking status
-    const waitState = new sfn.Wait(this, DefaultIdBuilder.build(`${dataProcessingStageName}-wait`), {
+    const waitStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-wait`);
+    const waitState = new sfn.Wait(this, waitStateId, {
+      stateName: `Waiting for ${dataProcessingStageName} Spark Job`,
       time: sfn.WaitTime.duration(Duration.seconds(30))
     });
 
@@ -154,7 +156,9 @@ export class DataProcessingStage extends Construct {
 
     // Create a choice state to check job status
     const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
-    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId)
+    const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
+      stateName: `${dataProcessingStageName} finished?`
+    })
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'SUCCESS'), successState)
       .when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)
       .otherwise(waitState);
