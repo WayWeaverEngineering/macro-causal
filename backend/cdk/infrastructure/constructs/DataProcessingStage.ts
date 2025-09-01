@@ -33,7 +33,7 @@ export class DataProcessingStage extends Construct {
       directory: `../pipeline/${dataProcessingStageName}`,
       platform: ecrAssets.Platform.LINUX_AMD64,
       buildArgs: {
-        'SPARK_VERSION': '3.5.0',
+        'SPARK_VERSION': '3.5.5',
         'PYTHON_VERSION': '3.10'
       }
     });

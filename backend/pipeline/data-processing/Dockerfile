@@ -1,5 +1,5 @@
 # Use the latest EMR Serverless Spark base image with Python 3.10 support
-FROM public.ecr.aws/emr-serverless/spark/emr-7.0.0:latest
+FROM public.ecr.aws/emr-serverless/spark/emr-7.10.0:latest
 
 # Set working directory
 WORKDIR /opt/spark/work-dir
