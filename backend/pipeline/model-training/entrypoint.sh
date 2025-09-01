@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# Entrypoint script for Ray model training container
+# Entrypoint script for Hybrid Causal Inference Training Pipeline
 
 set -e
 
-echo "Starting Ray model training container..."
+echo "Starting Hybrid Causal Inference Training Pipeline..."
 
 # Get environment variables
 EXECUTION_ID=${EXECUTION_ID:-"unknown"}
 GOLD_BUCKET=${GOLD_BUCKET:-""}
 ARTIFACTS_BUCKET=${ARTIFACTS_BUCKET:-""}
-MODEL_REGISTRY_TABLE=${MODEL_REGISTRY_TABLE:-""}
 
 # Validate required environment variables
 if [ -z "$GOLD_BUCKET" ]; then
@@ -23,23 +22,23 @@ if [ -z "$ARTIFACTS_BUCKET" ]; then
     exit 1
 fi
 
-if [ -z "$MODEL_REGISTRY_TABLE" ]; then
-    echo "Error: MODEL_REGISTRY_TABLE environment variable is required"
-    exit 1
-fi
-
 echo "Environment variables:"
 echo "  EXECUTION_ID: $EXECUTION_ID"
 echo "  GOLD_BUCKET: $GOLD_BUCKET"
 echo "  ARTIFACTS_BUCKET: $ARTIFACTS_BUCKET"
-echo "  MODEL_REGISTRY_TABLE: $MODEL_REGISTRY_TABLE"
+
+# Check if we're in testing mode
+if [ "$TESTING" = "true" ]; then
+    echo "Running in testing mode..."
+    python test_training.py
+    exit $?
+fi
 
 # Run the training script
-echo "Starting model training..."
+echo "Starting hybrid causal inference training..."
 python main.py \
     --execution-id "$EXECUTION_ID" \
     --gold-bucket "$GOLD_BUCKET" \
-    --artifacts-bucket "$ARTIFACTS_BUCKET" \
-    --model-registry-table "$MODEL_REGISTRY_TABLE"
+    --artifacts-bucket "$ARTIFACTS_BUCKET"
 
-echo "Model training completed successfully"
+echo "Hybrid causal inference training completed successfully"
