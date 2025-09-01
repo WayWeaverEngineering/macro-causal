@@ -7,12 +7,13 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export interface EksRayClusterProps {
   name: string;
   goldBucket: s3.Bucket;
   artifactsBucket: s3.Bucket;
-  modelRegistryTable: string;
+  modelRegistryTable: dynamodb.Table;
 }
 
 export class EksRayClusterConstruct extends Construct {
@@ -109,7 +110,7 @@ export class EksRayClusterConstruct extends Construct {
         'dynamodb:Query',
         'dynamodb:Scan',
       ],
-      resources: [`arn:aws:dynamodb:${Stack.of(this).region}:${Stack.of(this).account}:table/${props.modelRegistryTable}`],
+      resources: [props.modelRegistryTable.tableArn],
     }));
 
     // Add ECR permissions for pulling training images

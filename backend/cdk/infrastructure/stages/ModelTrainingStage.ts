@@ -12,12 +12,13 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import { Duration, Stack } from 'aws-cdk-lib';
 import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export interface ModelTrainingStageProps {
   dataLakeStack: DataLakeStack;
   commonUtilsLambdaLayer: ILayerVersion;
   ecsLambdaLayer: ILayerVersion;
-  modelRegistryTable: string;
+  modelRegistryTable: dynamodb.Table;
 }
 
 export class ModelTrainingStage extends Construct implements sfn.IChainable {
@@ -78,7 +79,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         RAY_NAMESPACE: rayCluster.rayNamespace,
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
         ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
-        MODEL_REGISTRY_TABLE: props.modelRegistryTable,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
       },
     });
 
@@ -96,7 +97,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         RAY_NAMESPACE: rayCluster.rayNamespace,
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
         ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
-        MODEL_REGISTRY_TABLE: props.modelRegistryTable,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
       },
       layers: [
         props.commonUtilsLambdaLayer,
@@ -233,7 +234,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         'dynamodb:Query',
         'dynamodb:Scan',
       ],
-      resources: [`arn:aws:dynamodb:${Stack.of(this).region}:${Stack.of(this).account}:table/${props.modelRegistryTable}`],
+      resources: [props.modelRegistryTable.tableArn],
     }));
 
     // Grant EKS access for Ray cluster management

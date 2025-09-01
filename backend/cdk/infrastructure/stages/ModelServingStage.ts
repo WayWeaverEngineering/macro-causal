@@ -6,12 +6,12 @@ import { Duration } from 'aws-cdk-lib';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 
 export interface ModelServingStageProps {
   dataLakeStack: DataLakeStack;
-  modelRegistryTable: string;
+  modelRegistryTable: dynamodb.Table;
 }
 
 export class ModelServingStage extends Construct implements sfn.IChainable {
@@ -40,7 +40,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
       environment: {
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
         ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,
-        MODEL_REGISTRY_TABLE: props.modelRegistryTable,
+        MODEL_REGISTRY_TABLE: props.modelRegistryTable.tableName,
         EXECUTION_MODE: 'standalone', // Running as persistent service
         PIPELINE_EXECUTION_ID: 'persistent-service',
         EXECUTION_START_TIME: 'continuous'
@@ -61,7 +61,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
         'dynamodb:Query',
         'dynamodb:Scan'
       ],
-      resources: [props.modelRegistryTable]
+      resources: [props.modelRegistryTable.tableArn]
     });
     modelServingService.service.taskDefinition.taskRole.addToPrincipalPolicy(modelRegistryReadStatement);
 

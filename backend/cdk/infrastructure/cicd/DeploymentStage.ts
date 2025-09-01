@@ -45,7 +45,7 @@ export class DeploymentStage extends Stage {
     const mlPipelineStack = new MLPipelineStack(this, mlPipelineStackId, {
       dataLakeStack,
       lambdaLayersStack,
-      modelRegistryTable: modelRegistryStack.modelRegistryTable.tableName
+      modelRegistryTable: modelRegistryStack.modelRegistryTable
     });
 
     mlPipelineStack.addDependency(dataLakeStack);
