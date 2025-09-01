@@ -2,10 +2,10 @@ import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { DefaultIdBuilder } from '../../utils/Naming';
 import { DataLakeStack } from './DataLakeStack';
-import { DataCollectionStage } from '../constructs/DataCollectionStage';
+import { DataCollectionStage } from '../stages/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
-import { DataProcessingStage } from '../constructs/DataProcessingStage';
-import { ModelTrainingStage } from '../constructs/ModelTrainingStage';
+import { DataProcessingStage } from '../stages/DataProcessingStage';
+import { ModelTrainingStage } from '../stages/ModelTrainingStage';
 import { AWS_CLIENT_ECS_LAMBDA_LAYER_NAME, AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
 
 export interface MLPipelineStackProps extends StackProps {

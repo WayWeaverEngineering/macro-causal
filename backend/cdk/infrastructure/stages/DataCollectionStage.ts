@@ -2,7 +2,7 @@ import { Construct } from "constructs";
 import { AwsConfig } from "../configs/AwsConfig";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { DefaultIdBuilder } from "../../utils/Naming";
-import { EcsFargateServiceConstruct } from "./EcsFargateServiceConstruct";
+import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { Duration } from "aws-cdk-lib";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
