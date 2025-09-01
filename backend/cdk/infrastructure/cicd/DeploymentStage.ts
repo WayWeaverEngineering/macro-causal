@@ -11,6 +11,7 @@ import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionSta
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { MLPipelineStack } from "../stacks/MLPipelineStack";
 import { ModelRegistryStack } from "../stacks/ModelRegistryStack";
+import { AnalysisStack } from "../stacks/AnalysisStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
@@ -48,7 +49,14 @@ export class DeploymentStage extends Stage {
       modelRegistryTable: modelRegistryStack.modelRegistryTable
     });
 
+    // Create Analysis stack
+    const analysisStackId = DefaultIdBuilder.build('analysis-stack');
+    const analysisStack = new AnalysisStack(this, analysisStackId, {
+      lambdaLayersStack
+    });
+
     mlPipelineStack.addDependency(dataLakeStack);
     mlPipelineStack.addDependency(modelRegistryStack);
+    analysisStack.addDependency(lambdaLayersStack);
   }
 }
