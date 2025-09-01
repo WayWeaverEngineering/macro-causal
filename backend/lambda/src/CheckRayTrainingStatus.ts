@@ -15,10 +15,8 @@ interface CheckRayTrainingStatusResponse {
 // Environment variables
 const {
   ECS_CLUSTER_ARN,
-  AWS_REGION
 } = loadEnvVars([
   'ECS_CLUSTER_ARN',
-  'AWS_REGION'
 ]);
 
 export const handler = async (
@@ -39,7 +37,7 @@ export const handler = async (
 
     console.log(`Checking status for Ray training task: ${taskArn}`);
 
-    const ecsClient = new ECSClient({ region: AWS_REGION });
+    const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
 
     // Check ECS task status
     const describeTasksCommand = new DescribeTasksCommand({

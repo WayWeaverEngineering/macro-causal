@@ -29,7 +29,6 @@ export class ModelRegistryStack extends Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: RemovalPolicy.RETAIN,
-      pointInTimeRecovery: true,
       timeToLiveAttribute: MACRO_CAUSAL_CONSTANTS.DYNAMODB.TTL_ATTRIBUTE,
     });
 
