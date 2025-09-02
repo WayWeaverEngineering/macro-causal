@@ -8,6 +8,11 @@ import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { AwsConfig } from "../configs/AwsConfig";
+import { CfnOutput } from 'aws-cdk-lib';
 
 export interface ModelServingStageProps {
   dataLakeStack: DataLakeStack;
@@ -45,6 +50,53 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
         PIPELINE_EXECUTION_ID: 'persistent-service',
         EXECUTION_START_TIME: 'continuous'
       }
+    });
+
+    // Create a public Application Load Balancer for the model serving service
+    const vpc = modelServingService.service.cluster.vpc;
+    const albId = DefaultIdBuilder.build(`${modelServingStageName}-alb`);
+    const alb = new elbv2.ApplicationLoadBalancer(this, albId, {
+      vpc,
+      internetFacing: true,
+    });
+
+    // Security: allow ALB to reach the service on container port
+    const serviceSecurityGroup = modelServingService.service.connections.securityGroups[0];
+    const albSecurityGroup = alb.connections.securityGroups[0];
+    serviceSecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(8080),
+      'Allow ALB to reach Fargate service'
+    );
+
+    // HTTPS listener with certificate
+    const inferenceCert = acm.Certificate.fromCertificateArn(
+      this,
+      DefaultIdBuilder.build('inference-domain-certificate'),
+      AwsConfig.INFERENCE_DOMAIN_CERTIFICATE_ARN
+    );
+
+    const httpsListener = alb.addListener('https-listener', {
+      port: 443,
+      open: true,
+      certificates: [inferenceCert],
+    });
+
+    // Forward HTTPS to Fargate service (container listens on 8080)
+    httpsListener.addTargets('fargate-targets', {
+      port: 8080,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targets: [modelServingService.service],
+      healthCheck: {
+        path: '/health',
+        healthyHttpCodes: '200',
+      },
+    });
+
+    // HTTP -> HTTPS redirect
+    const httpListener = alb.addListener('http-listener', { port: 80, open: true });
+    httpListener.addAction('redirect-to-https', {
+      action: elbv2.ListenerAction.redirect({ protocol: 'HTTPS', port: '443' })
     });
 
     // Grant permissions to read from gold bucket (for processed data)
