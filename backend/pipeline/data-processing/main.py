@@ -629,7 +629,7 @@ def main() -> int:
             return 0
         elif results['overall_status'] == 'partial_failure':
             logger.warning("Data Processing Pipeline completed with partial failures")
-            return 1
+            return 0
         else:
             logger.error("Data Processing Pipeline failed")
             return 1

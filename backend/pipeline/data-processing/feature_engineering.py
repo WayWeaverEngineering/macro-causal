@@ -668,7 +668,7 @@ class FeatureEngineer:
                         raise
             
             # Final validation: ensure combined DataFrame has consistent timezone-aware index
-            if not combined_df.empty:
+            if not combined_df.empty and isinstance(combined_df.index, pd.DatetimeIndex):
                 if combined_df.index.tz is None:
                     logger.warning("Combined DataFrame has timezone-naive index, converting to UTC")
                     combined_df.index = combined_df.index.tz_localize('UTC')
@@ -724,7 +724,7 @@ class FeatureEngineer:
             combined_df = self._clean_final_dataset(combined_df)
             
             # Final timezone validation
-            if not combined_df.empty:
+            if not combined_df.empty and isinstance(combined_df.index, pd.DatetimeIndex):
                 if hasattr(combined_df.index, 'tz'):
                     if combined_df.index.tz is None:
                         logger.warning("Final dataset has timezone-naive index, converting to UTC")
@@ -772,22 +772,17 @@ class FeatureEngineer:
             # Final validation before return
             if not combined_df.empty:
                 try:
-                    # Ensure the final dataset is properly formatted
                     combined_df = combined_df.copy()  # Defragment
-                    
-                    # Final timezone check
-                    if hasattr(combined_df.index, 'tz') and combined_df.index.tz is not None:
-                        if str(combined_df.index.tz) != 'UTC':
-                            logger.info(f"Final timezone conversion: {combined_df.index.tz} -> UTC")
-                            combined_df.index = combined_df.index.tz_convert('UTC')
-                    
-                    # Final check for any remaining timezone issues
-                    if hasattr(combined_df.index, 'tz') and combined_df.index.tz is None:
-                        logger.warning("Final dataset index is still timezone-naive, converting to UTC")
-                        combined_df.index = combined_df.index.tz_localize('UTC')
-                    
-                    # Final validation: ensure all datetime columns are timezone-consistent
-                    datetime_columns = [col for col in combined_df.columns if pd.api.types.is_datetime64_any_dtype(combined_df[col])]
+
+                    # Ensure the 'date' column exists and is UTC tz-aware
+                    if 'date' in combined_df.columns and pd.api.types.is_datetime64_any_dtype(combined_df['date']):
+                        if combined_df['date'].dt.tz is None:
+                            combined_df['date'] = combined_df['date'].dt.tz_localize('UTC')
+                        else:
+                            combined_df['date'] = combined_df['date'].dt.tz_convert('UTC')
+
+                    # Ensure any other datetime cols are UTC tz-aware (won't touch index)
+                    datetime_columns = [c for c in combined_df.columns if pd.api.types.is_datetime64_any_dtype(combined_df[c])]
                     if datetime_columns:
                         logger.info(f"Final validation: ensuring timezone consistency in {len(datetime_columns)} datetime columns")
                         for col in datetime_columns:
@@ -798,17 +793,10 @@ class FeatureEngineer:
                                     combined_df[col] = combined_df[col].dt.tz_convert('UTC')
                             except Exception as col_e:
                                 logger.warning(f"Could not normalize timezone for column {col}: {col_e}")
-                    
-                    # Final check: ensure the DataFrame is not fragmented
-                    if hasattr(combined_df, '_is_copy') and combined_df._is_copy is not None:
-                        combined_df = combined_df.copy()
-                    
-                    # Final validation: ensure the DataFrame has a valid timezone-aware index
-                    if not hasattr(combined_df.index, 'tz') or combined_df.index.tz is None:
-                        logger.warning("Final dataset index is still timezone-naive, converting to UTC")
-                        combined_df.index = combined_df.index.tz_localize('UTC')
-                    
-                    logger.info(f"Final dataset ready: shape={combined_df.shape}, timezone={getattr(combined_df.index, 'tz', 'N/A')}")
+
+                    # no index tz_localize/convert here on purpose
+
+                    logger.info(f"Final dataset ready: shape={combined_df.shape}, index_type={type(combined_df.index).__name__}")
                 except Exception as e:
                     logger.error(f"Error in final validation: {e}")
                     # Continue with the dataset as-is rather than failing completely
@@ -846,7 +834,7 @@ class FeatureEngineer:
             try:
                 # Ensure index is datetime
                 if not isinstance(df.index, pd.DatetimeIndex):
-                    df.index = pd.to_datetime(df.index, errors='coerce')
+                    df.index = pd.to_datetime(df.index, errors='coerce', utc=True)  # tz-aware immediately
                 
                 # Handle any NaT values that might cause issues
                 if df.index.isna().any():
@@ -855,7 +843,7 @@ class FeatureEngineer:
                 
                 # Normalize to UTC timezone-aware
                 if df.index.tz is None:
-                    # If timezone-naive, assume UTC and make timezone-aware
+                    # If still timezone-naive, make timezone-aware UTC
                     df.index = df.index.tz_localize('UTC')
                     logger.debug(f"DataFrame {i} index made timezone-aware UTC")
                 else:
@@ -997,7 +985,7 @@ class FeatureEngineer:
                 return df
             
             # Check for any remaining timezone issues
-            if hasattr(df.index, 'tz'):
+            if isinstance(df.index, pd.DatetimeIndex) and hasattr(df.index, 'tz'):
                 if df.index.tz is None:
                     logger.warning("Combined DataFrame index is timezone-naive, converting to UTC")
                     df.index = df.index.tz_localize('UTC')
@@ -1010,10 +998,10 @@ class FeatureEngineer:
                 logger.warning("Found infinite values in combined DataFrame, replacing with NaN")
                 df = df.replace([np.inf, -np.inf], np.nan)
             
-            # Check for any remaining NaN values in the index
-            if df.index.isna().any():
-                logger.warning("Found NaN values in index, removing affected rows")
-                df = df.dropna(subset=[df.index.name] if df.index.name else None)
+            # Remove NaT from the index properly
+            if isinstance(df.index, pd.DatetimeIndex) and df.index.isna().any():
+                logger.warning("Found NaT values in index, removing affected rows")
+                df = df.loc[~df.index.isna()]
             
             # Ensure the DataFrame is not fragmented
             df = df.copy()
@@ -1030,41 +1018,47 @@ class FeatureEngineer:
         try:
             # Reset index to get date as column
             df = df.reset_index()
-            
-            # Ensure timezone consistency in all datetime columns
-            df = self._ensure_timezone_consistency(df)
-            
+
+            # Ensure we actually have a 'date' column (index name is 'date' in our pivots,
+            # so reset_index() should have created it; this is a safety belt)
+            if 'date' not in df.columns and 'index' in df.columns:
+                df = df.rename(columns={'index': 'date'})
+
+            # Normalize 'date' as UTC tz-aware datetime
+            if 'date' in df.columns:
+                # to_datetime with utc=True yields tz-aware UTC
+                df['date'] = pd.to_datetime(df['date'], errors='coerce', utc=True)
+
             # Remove rows with missing target values
             if 'target' in df.columns:
                 df = df.dropna(subset=['target'])
-            
+
             # Fill missing values in features with 0, handling categorical columns properly
             feature_columns = [col for col in df.columns if col not in ['date', 'target', 'execution_id', 'feature_creation_timestamp']]
-            
             for col in feature_columns:
                 if col not in df.columns:
                     continue
                 if isinstance(df[col].dtype, pd.CategoricalDtype):
-                    # ensure a safe string category
                     fill_value = 'unknown'
                     if fill_value not in df[col].cat.categories:
                         df[col] = df[col].cat.add_categories([fill_value])
                     df[col] = df[col].fillna(fill_value)
                 else:
                     df[col] = df[col].fillna(0)
-            
+
             # Remove infinite values
             df = df.replace([np.inf, -np.inf], 0)
-            
+
             # Add execution metadata
             df['execution_id'] = self.execution_id
             df['feature_creation_timestamp'] = datetime.now().isoformat()
-            
-            # Sort by date
-            df = df.sort_values('date')
-            
+
+            # Sort by date if present
+            if 'date' in df.columns:
+                df = df.sort_values('date')
+
             return df
-            
+
         except Exception as e:
             logger.error(f"Error cleaning final dataset: {e}")
             raise
