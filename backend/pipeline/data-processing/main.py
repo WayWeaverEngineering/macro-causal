@@ -272,7 +272,8 @@ class DataProcessor:
             required_columns = ['Close']
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                raise ValueError(f"Missing required columns: {missing_columns}")
+                logger.warning(f"Missing required columns: {missing_columns}. Skipping Yahoo Finance data point.")
+                return pd.DataFrame()
             
             # Pick/normalize a date column with more options including epoch timestamps
             date_column = None
@@ -283,7 +284,8 @@ class DataProcessor:
                     break
             
             if date_column is None:
-                raise ValueError("No date column found. Available columns: " + str(list(df.columns)))
+                logger.warning(f"No date column found in Yahoo Finance data. Available columns: {list(df.columns)}. Skipping data point.")
+                return pd.DataFrame()
             
             # Standardize column names
             rename_map = {date_column: 'date', 'Adj Close': 'Adj_Close', 'AdjClose': 'Adj_Close'}
@@ -296,7 +298,8 @@ class DataProcessor:
                     symbol_col = c
                     break
             if symbol_col is None:
-                raise ValueError("No symbol/ticker column found in Yahoo Finance file")
+                logger.warning("No symbol/ticker column found in Yahoo Finance file. Skipping data point.")
+                return pd.DataFrame()
             # normalize to 'symbol' as string
             df['symbol'] = df[symbol_col].astype(str)
 
@@ -317,7 +320,8 @@ class DataProcessor:
             
             # Check for invalid dates
             if df['date'].isna().all():
-                raise ValueError("All date values are invalid after conversion")
+                logger.warning("All date values are invalid after conversion. Skipping Yahoo Finance data point.")
+                return pd.DataFrame()
 
             # Convert numeric columns safely
             numeric_columns = ['Open', 'High', 'Low', 'Close', 'Adj_Close', 'Volume']
