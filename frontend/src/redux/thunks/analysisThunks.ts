@@ -127,8 +127,10 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
         const steps = response.steps || [];
         const currentStep = response.currentStep;
         
-        // Update status
-        dispatch(setAnalysisStatus(status));
+        // Update status if available
+        if (status) {
+          dispatch(setAnalysisStatus(status));
+        }
         
         // Update timestamps if available
         if (response.createdAt) {
