@@ -1,9 +1,11 @@
-import { CssBaseline, ThemeProvider, createTheme, Container, Box } from '@mui/material';
+import { CssBaseline, ThemeProvider, createTheme, Container, Box, Button, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import { QueryInput } from '../components/QueryInput';
 import { AnalysisStatus } from '../components/AnalysisStatus';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
 import { Header } from '../components/Header';
 import { CurrentStepNotification } from '../components/CurrentStepNotification';
+import { useState } from 'react';
+import PipelineSvg from '../images/ml-pipeline-success.svg';
 
 const darkTheme = createTheme({
   palette: { 
@@ -58,17 +60,47 @@ const darkTheme = createTheme({
 });
 
 function MacroAnalyst() {
+  const [openPipelineDialog, setOpenPipelineDialog] = useState(false);
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <Box sx={{ minHeight: '100vh', backgroundColor: '#121212' }}>
         <Header />
         <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button variant="outlined" color="primary" onClick={() => setOpenPipelineDialog(true)}>
+              View ML Pipeline Design
+            </Button>
+          </Box>
           <QueryInput />
           <AnalysisStatus />
           <CausalAnalysisResults />
         </Container>
         <CurrentStepNotification />
+
+        <Dialog
+          open={openPipelineDialog}
+          onClose={() => setOpenPipelineDialog(false)}
+          maxWidth="lg"
+          fullWidth
+          PaperProps={{
+            sx: {
+              backgroundColor: '#0e0e0e',
+            }
+          }}
+        >
+          <DialogTitle sx={{ backgroundColor: '#0e0e0e' }}>ML Pipeline Design</DialogTitle>
+          <DialogContent dividers sx={{ backgroundColor: '#0b0b0b' }}>
+            <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <img
+                src={PipelineSvg}
+                alt="ML Pipeline Design"
+                style={{ maxWidth: '100%', maxHeight: '70vh', height: 'auto' }}
+              />
+            </Box>
+          </DialogContent>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );
