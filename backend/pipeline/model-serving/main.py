@@ -66,6 +66,72 @@ model_cache: Dict[str, Any] = {}
 # Model types supported
 SUPPORTED_MODEL_TYPES = ['hybrid_causal_model']
 
+def validate_environment() -> bool:
+    """Validate that all required environment variables and S3 paths are accessible"""
+    try:
+        # Check required environment variables
+        required_vars = ['GOLD_BUCKET', 'ARTIFACTS_BUCKET', 'MODEL_REGISTRY_TABLE']
+        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            logger.error("Missing required environment variables", missing_vars=missing_vars)
+            return False
+        
+        # Validate S3 bucket access
+        for bucket_name in [GOLD_BUCKET, ARTIFACTS_BUCKET]:
+            try:
+                s3.head_bucket(Bucket=bucket_name)
+                logger.info("Successfully accessed bucket", bucket=bucket_name)
+            except Exception as e:
+                logger.error("Failed to access bucket", bucket=bucket_name, error=str(e))
+                return False
+        
+        # Validate DynamoDB table access
+        try:
+            dynamodb.describe_table(TableName=MODEL_REGISTRY_TABLE)
+            logger.info("Successfully accessed DynamoDB table", table=MODEL_REGISTRY_TABLE)
+        except Exception as e:
+            logger.error("Failed to access DynamoDB table", table=MODEL_REGISTRY_TABLE, error=str(e))
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error("Error validating environment", error=str(e))
+        return False
+
+def ensure_model_folders() -> None:
+    """Ensure required model folders exist in S3"""
+    try:
+        # Create models folder in artifacts bucket
+        models_folder = f"models/{datetime.now().strftime('%Y%m%d')}/"
+        try:
+            s3.put_object(
+                Bucket=ARTIFACTS_BUCKET,
+                Key=f"{models_folder}.keep",
+                Body='',
+                ContentType='text/plain'
+            )
+            logger.info("Ensured models folder exists", folder=models_folder)
+        except Exception as e:
+            logger.warning("Could not create models folder", folder=models_folder, error=str(e))
+        
+        # Create inference results folder in gold bucket
+        inference_folder = f"inference_results/{datetime.now().strftime('%Y%m%d')}/"
+        try:
+            s3.put_object(
+                Bucket=GOLD_BUCKET,
+                Key=f"{inference_folder}.keep",
+                Body='',
+                ContentType='text/plain'
+            )
+            logger.info("Ensured inference results folder exists", folder=inference_folder)
+        except Exception as e:
+            logger.warning("Could not create inference results folder", folder=inference_folder, error=str(e))
+            
+    except Exception as e:
+        logger.warning("Could not ensure model folders", error=str(e))
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the model serving application"""
@@ -79,6 +145,14 @@ async def startup_event():
     elif EXECUTION_MODE == 'standalone':
         logger.info("Running as persistent model serving service")
     
+    # Validate environment
+    if not validate_environment():
+        logger.error("Environment validation failed. Exiting.")
+        exit(1)
+
+    # Ensure model folders exist
+    ensure_model_folders()
+
     # Initialize models from registry
     await initialize_models()
 

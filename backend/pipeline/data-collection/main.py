@@ -29,6 +29,59 @@ s3_client = boto3.client('s3')
 
 BRONZE_BUCKET = os.environ.get('BRONZE_BUCKET')
 
+def ensure_s3_folder_structure(bucket_name: str) -> None:
+    """Ensure the expected S3 folder structure exists for downstream processing"""
+    try:
+        # Create placeholder files to establish folder structure
+        required_folders = [
+            'raw/fred/',
+            'raw/worldbank/',
+            'raw/yahoo_finance/',
+            'pipeline_results/data_collection/'
+        ]
+        
+        for folder in required_folders:
+            # Create a placeholder file to establish the folder
+            placeholder_key = f"{folder}.keep"
+            try:
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=placeholder_key,
+                    Body='',
+                    ContentType='text/plain'
+                )
+                logger.info(f"Created folder structure: {folder}")
+            except Exception as e:
+                logger.warning(f"Could not create folder {folder}: {e}")
+                
+    except Exception as e:
+        logger.warning(f"Could not ensure S3 folder structure: {e}")
+
+def validate_bronze_bucket_access(bucket_name: str) -> bool:
+    """Validate that we can access the bronze bucket and it has the expected structure"""
+    try:
+        # Test bucket access
+        s3_client.head_bucket(Bucket=bucket_name)
+        logger.info(f"Successfully accessed bronze bucket: {bucket_name}")
+        
+        # Check if bucket has expected structure
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix='raw/',
+            MaxKeys=1
+        )
+        
+        if 'Contents' in response:
+            logger.info("Bronze bucket has existing data structure")
+        else:
+            logger.info("Bronze bucket is empty, will create new structure")
+            
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to access bronze bucket {bucket_name}: {e}")
+        return False
+
 def log_pipeline_summary(all_results: dict) -> None:
     """Log a comprehensive summary of the entire pipeline"""
     logger.info("=" * 80)
@@ -105,6 +158,13 @@ def main():
         if not BRONZE_BUCKET:
             raise ValueError("BRONZE_BUCKET environment variable is required")
         
+        # Ensure S3 folder structure
+        ensure_s3_folder_structure(BRONZE_BUCKET)
+        
+        # Validate bronze bucket access
+        if not validate_bronze_bucket_access(BRONZE_BUCKET):
+            raise ValueError("Could not access or validate BRONZE_BUCKET. Exiting.")
+        
         # Initialize collectors
         fred_collector = FREDCollector()
         worldbank_collector = WorldBankCollector()
@@ -157,14 +217,18 @@ def main():
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         results_s3_path = f"pipeline_results/data_collection/{timestamp}_pipeline_results.json"
         
-        s3_client.put_object(
-            Bucket=BRONZE_BUCKET,
-            Key=results_s3_path,
-            Body=json.dumps(all_results, indent=2),
-            ContentType='application/json'
-        )
+        try:
+            s3_client.put_object(
+                Bucket=BRONZE_BUCKET,
+                Key=results_s3_path,
+                Body=json.dumps(all_results, indent=2),
+                ContentType='application/json'
+            )
+            logger.info(f"Data collection pipeline completed. Results saved to s3://{BRONZE_BUCKET}/{results_s3_path}")
+        except Exception as e:
+            logger.error(f"Failed to save results to S3: {e}")
+            all_results['overall_status'] = 'failed'
         
-        logger.info(f"Data collection pipeline completed. Results saved to s3://{BRONZE_BUCKET}/{results_s3_path}")
         logger.info(f"Overall status: {all_results['overall_status']}")
         
         # Exit with appropriate code

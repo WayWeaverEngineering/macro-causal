@@ -43,6 +43,70 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def validate_training_data_paths(gold_bucket: str, execution_id: str) -> bool:
+    """Validate that training data exists in the expected S3 paths"""
+    try:
+        s3_client = boto3.client('s3')
+        
+        # Check if gold bucket is accessible
+        try:
+            s3_client.head_bucket(Bucket=gold_bucket)
+            logger.info(f"Successfully accessed gold bucket: {gold_bucket}")
+        except Exception as e:
+            logger.error(f"Failed to access gold bucket {gold_bucket}: {e}")
+            return False
+        
+        # Check if training data exists
+        expected_data_key = f"gold/{execution_id}/processed_data.parquet"
+        try:
+            s3_client.head_object(Bucket=gold_bucket, Key=expected_data_key)
+            logger.info(f"Training data found: {expected_data_key}")
+            return True
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                logger.error(f"Training data not found: {expected_data_key}")
+                logger.error("This may indicate that the data processing stage failed or data is missing")
+                return False
+            else:
+                logger.error(f"Error checking training data: {e}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error validating training data paths: {e}")
+        return False
+
+def validate_artifacts_bucket(artifacts_bucket: str) -> bool:
+    """Validate that artifacts bucket is accessible and has required structure"""
+    try:
+        s3_client = boto3.client('s3')
+        
+        # Check if artifacts bucket is accessible
+        try:
+            s3_client.head_bucket(Bucket=artifacts_bucket)
+            logger.info(f"Successfully accessed artifacts bucket: {artifacts_bucket}")
+        except Exception as e:
+            logger.error(f"Failed to access artifacts bucket {artifacts_bucket}: {e}")
+            return False
+        
+        # Create models folder if it doesn't exist
+        try:
+            models_folder = f"models/{datetime.now().strftime('%Y%m%d')}/"
+            s3_client.put_object(
+                Bucket=artifacts_bucket,
+                Key=f"{models_folder}.keep",
+                Body='',
+                ContentType='text/plain'
+            )
+            logger.info(f"Ensured models folder exists: {models_folder}")
+        except Exception as e:
+            logger.warning(f"Could not create models folder: {e}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error validating artifacts bucket: {e}")
+        return False
+
 class AttentionRegimeClassifier(nn.Module):
     """Self-attention regime classifier for identifying market states"""
     
@@ -566,6 +630,13 @@ def main():
     args = parser.parse_args()
     
     try:
+        # Validate S3 paths
+        logger.info("Validating S3 paths...")
+        if not validate_training_data_paths(args.gold_bucket, args.execution_id):
+            return 1
+        if not validate_artifacts_bucket(args.artifacts_bucket):
+            return 1
+        
         # Load data
         logger.info("Loading training data...")
         df = load_data_from_s3(args.gold_bucket, args.execution_id)

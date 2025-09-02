@@ -25,6 +25,89 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def validate_s3_paths(bronze_bucket: str, silver_bucket: str, gold_bucket: str) -> bool:
+    """Validate that all required S3 buckets and paths are accessible"""
+    try:
+        s3_client = boto3.client('s3')
+        
+        # Test bucket access
+        for bucket_name in [bronze_bucket, silver_bucket, gold_bucket]:
+            try:
+                s3_client.head_bucket(Bucket=bucket_name)
+                logger.info(f"Successfully accessed bucket: {bucket_name}")
+            except Exception as e:
+                logger.error(f"Failed to access bucket {bucket_name}: {e}")
+                return False
+        
+        # Check if bronze bucket has expected data structure
+        expected_prefixes = ['raw/fred/', 'raw/worldbank/', 'raw/yahoo_finance/']
+        missing_prefixes = []
+        
+        for prefix in expected_prefixes:
+            try:
+                response = s3_client.list_objects_v2(
+                    Bucket=bronze_bucket,
+                    Prefix=prefix,
+                    MaxKeys=1
+                )
+                if 'Contents' not in response:
+                    missing_prefixes.append(prefix)
+            except Exception as e:
+                logger.warning(f"Could not check prefix {prefix}: {e}")
+                missing_prefixes.append(prefix)
+        
+        if missing_prefixes:
+            logger.warning(f"Missing expected data prefixes in bronze bucket: {missing_prefixes}")
+            logger.warning("Data processing may fail if no data exists in these paths")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error validating S3 paths: {e}")
+        return False
+
+def ensure_output_folders(silver_bucket: str, gold_bucket: str, execution_id: str) -> None:
+    """Ensure output folders exist in silver and gold buckets"""
+    try:
+        s3_client = boto3.client('s3')
+        
+        # Create silver bucket folders
+        silver_folders = [
+            f'silver/{execution_id}/fred/',
+            f'silver/{execution_id}/worldbank/',
+            f'silver/{execution_id}/yahoo_finance/'
+        ]
+        
+        for folder in silver_folders:
+            try:
+                s3_client.put_object(
+                    Bucket=silver_bucket,
+                    Key=f"{folder}.keep",
+                    Body='',
+                    ContentType='text/plain'
+                )
+                logger.info(f"Created silver folder: {folder}")
+            except Exception as e:
+                logger.warning(f"Could not create silver folder {folder}: {e}")
+        
+        # Create gold bucket folders
+        gold_folders = [
+            f'gold/{execution_id}/',
+            f'pipeline_results/data_processing/'
+        ]
+        
+        for folder in gold_folders:
+            try:
+                s3_client.put_object(
+                    Bucket=gold_bucket,
+                    Key=f"{folder}.keep",
+                    Body='',
+                    ContentType='text/plain'
+                )
+                logger.info(f"Created gold folder: {folder}")
+            except Exception as e:
+                logger.warning(f"Could not create gold folder {folder}: {e}")
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Data Processing Pipeline')
@@ -215,64 +298,79 @@ class DataProcessor:
             logger.info("Processing FRED data...")
             fred_files = self.list_s3_objects(self.bronze_bucket, 'raw/fred/')
             
-            for file_key in fred_files:
-                if file_key.endswith('.parquet'):
-                    try:
-                        df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
-                        processed_df = self.process_fred_data(df)
-                        
-                        # Save to silver bucket
-                        silver_key = f"silver/{self.execution_id}/fred/{file_key.split('/')[-1]}"
-                        self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
-                        
-                        results['fred']['records_processed'] += len(processed_df)
-                        results['fred']['files_processed'] += 1
-                        
-                    except Exception as e:
-                        logger.warning(f"Failed to process FRED file {file_key}: {e}")
-                        self.results['errors'].append(f"FRED processing error: {e}")
+            if not fred_files:
+                logger.warning("No FRED data files found in bronze bucket")
+            else:
+                for file_key in fred_files:
+                    if file_key.endswith('.parquet'):
+                        try:
+                            df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
+                            processed_df = self.process_fred_data(df)
+                            
+                            # Save to silver bucket
+                            silver_key = f"silver/{self.execution_id}/fred/{file_key.split('/')[-1]}"
+                            self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
+                            
+                            results['fred']['records_processed'] += len(processed_df)
+                            results['fred']['files_processed'] += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to process FRED file {file_key}: {e}")
+                            self.results['errors'].append(f"FRED processing error: {e}")
             
             # Process World Bank data
             logger.info("Processing World Bank data...")
             worldbank_files = self.list_s3_objects(self.bronze_bucket, 'raw/worldbank/')
             
-            for file_key in worldbank_files:
-                if file_key.endswith('.parquet'):
-                    try:
-                        df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
-                        processed_df = self.process_worldbank_data(df)
-                        
-                        # Save to silver bucket
-                        silver_key = f"silver/{self.execution_id}/worldbank/{file_key.split('/')[-1]}"
-                        self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
-                        
-                        results['worldbank']['records_processed'] += len(processed_df)
-                        results['worldbank']['files_processed'] += 1
-                        
-                    except Exception as e:
-                        logger.warning(f"Failed to process World Bank file {file_key}: {e}")
-                        self.results['errors'].append(f"World Bank processing error: {e}")
+            if not worldbank_files:
+                logger.warning("No World Bank data files found in bronze bucket")
+            else:
+                for file_key in worldbank_files:
+                    if file_key.endswith('.parquet'):
+                        try:
+                            df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
+                            processed_df = self.process_worldbank_data(df)
+                            
+                            # Save to silver bucket
+                            silver_key = f"silver/{self.execution_id}/worldbank/{file_key.split('/')[-1]}"
+                            self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
+                            
+                            results['worldbank']['records_processed'] += len(processed_df)
+                            results['worldbank']['files_processed'] += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to process World Bank file {file_key}: {e}")
+                            self.results['errors'].append(f"World Bank processing error: {e}")
             
             # Process Yahoo Finance data
             logger.info("Processing Yahoo Finance data...")
             yahoo_files = self.list_s3_objects(self.bronze_bucket, 'raw/yahoo_finance/')
             
-            for file_key in yahoo_files:
-                if file_key.endswith('.parquet'):
-                    try:
-                        df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
-                        processed_df = self.process_yahoo_finance_data(df)
-                        
-                        # Save to silver bucket
-                        silver_key = f"silver/{self.execution_id}/yahoo_finance/{file_key.split('/')[-1]}"
-                        self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
-                        
-                        results['yahoo_finance']['records_processed'] += len(processed_df)
-                        results['yahoo_finance']['files_processed'] += 1
-                        
-                    except Exception as e:
-                        logger.warning(f"Failed to process Yahoo Finance file {file_key}: {e}")
-                        self.results['errors'].append(f"Yahoo Finance processing error: {e}")
+            if not yahoo_files:
+                logger.warning("No Yahoo Finance data files found in bronze bucket")
+            else:
+                for file_key in yahoo_files:
+                    if file_key.endswith('.parquet'):
+                        try:
+                            df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
+                            processed_df = self.process_yahoo_finance_data(df)
+                            
+                            # Save to silver bucket
+                            silver_key = f"silver/{self.execution_id}/yahoo_finance/{file_key.split('/')[-1]}"
+                            self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
+                            
+                            results['yahoo_finance']['records_processed'] += len(processed_df)
+                            results['yahoo_finance']['files_processed'] += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to process Yahoo Finance file {file_key}: {e}")
+                            self.results['errors'].append(f"Yahoo Finance processing error: {e}")
+            
+            # Check if any data was processed
+            total_files = sum(r['files_processed'] for r in results.values())
+            if total_files == 0:
+                logger.warning("No data files were processed. This may indicate missing input data.")
+                self.results['errors'].append("No input data files found to process")
             
             logger.info("Bronze to Silver processing completed successfully")
             
@@ -402,6 +500,14 @@ def main() -> int:
         logger.info(f'Gold bucket: {args.gold_bucket}')
         logger.info(f'Execution ID: {args.execution_id}')
         logger.info('=' * 60)
+        
+        # Validate S3 paths before processing
+        if not validate_s3_paths(args.bronze_bucket, args.silver_bucket, args.gold_bucket):
+            logger.error("S3 path validation failed. Exiting.")
+            return 1
+        
+        # Ensure output folders exist
+        ensure_output_folders(args.silver_bucket, args.gold_bucket, args.execution_id)
         
         # Initialize data processor
         processor = DataProcessor(
