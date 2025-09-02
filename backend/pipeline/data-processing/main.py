@@ -18,6 +18,10 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 from feature_engineering import FeatureEngineer
+from pandas.api.types import (
+    is_integer_dtype, is_float_dtype,
+    is_datetime64_dtype, is_datetime64tz_dtype
+)
 
 # Configure logging
 logging.basicConfig(
@@ -296,11 +300,20 @@ class DataProcessor:
             # normalize to 'symbol' as string
             df['symbol'] = df[symbol_col].astype(str)
 
-            # Handle epoch timestamps (ints) if present
-            if np.issubdtype(df['date'].dtype, np.number):
-                df['date'] = pd.to_datetime(df['date'], unit='s', utc=True, errors='coerce')
+            # Date normalization using proper pandas type checking
+            date_s = df['date']
+            if is_integer_dtype(date_s) or is_float_dtype(date_s):
+                # epoch seconds (or ms if that is your schema—adjust unit as needed)
+                df['date'] = pd.to_datetime(date_s, unit='s', utc=True, errors='coerce')
+            elif is_datetime64tz_dtype(date_s):
+                # keep in UTC but make naive if you want a naive UTC column
+                df['date'] = date_s.dt.tz_convert('UTC').dt.tz_localize(None)
+            elif is_datetime64_dtype(date_s):
+                # naive datetimes — treat as UTC
+                df['date'] = pd.to_datetime(date_s, utc=True, errors='coerce')
             else:
-                df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce')
+                # strings/objects
+                df['date'] = pd.to_datetime(date_s, utc=True, errors='coerce')
             
             # Check for invalid dates
             if df['date'].isna().all():
@@ -318,6 +331,11 @@ class DataProcessor:
 
             # Remove rows with missing values in key columns
             df = df.dropna(subset=['Close', 'date'])
+            
+            # Safety check: ensure we have usable data after cleaning
+            if df[['date', 'symbol', 'Close']].dropna().empty:
+                logger.info("Yahoo Finance frame has no usable rows (date/symbol/Close NA).")
+                return pd.DataFrame()
             
             # Sort by date
             df = df.sort_values('date')
@@ -419,6 +437,8 @@ class DataProcessor:
                         cols = list(df.columns) if 'df' in locals() else None
                         logger.warning(f"Failed to process Yahoo Finance file {file_key}: {e}; columns={cols}")
                         self.results['errors'].append(f"Yahoo Finance processing error: {e}")
+                        # Continue processing other files instead of failing completely
+                        continue
             
             # Check if any data was processed
             total_files = sum(r['files_processed'] for r in results.values())
