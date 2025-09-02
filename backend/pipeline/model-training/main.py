@@ -21,8 +21,9 @@ import numpy as np
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.base import clone
+import sklearn
+import econml
 
 import torch
 import torch.nn as nn
@@ -219,16 +220,7 @@ class HybridCausalSystem:
             if not d.is_monotonic_increasing:
                 raise ValueError("Input not sorted by date; sort before rolling/diff.")
     
-    def _infer_data_frequency(self, df: pd.DataFrame) -> str:
-        """Infer the frequency of the data for proper window sizing"""
-        if 'date' in df.columns:
-            try:
-                freq = pd.infer_freq(pd.to_datetime(df['date']))
-                logger.info(f"Inferred data frequency: {freq}")
-                return freq
-            except Exception:
-                logger.warning("Could not infer data frequency, using default windows")
-        return None
+
     
     def _initialize_causal_model(self, X: np.ndarray, T: np.ndarray, Y: np.ndarray):
         """Initialize the appropriate causal model based on data characteristics"""
@@ -244,29 +236,20 @@ class HybridCausalSystem:
         if n_samples < 100:
             # Small sample size - use Linear DML
             logger.warning("Small sample size, using Linear DML instead of Causal Forest")
+            rf_kwargs = dict(n_estimators=n_estimators, random_state=42, n_jobs=-1)
             self.causal_model = LinearDML(
-                model_y=RandomForestRegressor(n_estimators=n_estimators, random_state=42),
-                model_t=RandomForestRegressor(n_estimators=n_estimators, random_state=42),
+                model_y=RandomForestRegressor(**rf_kwargs),
+                model_t=RandomForestRegressor(**rf_kwargs),
                 discrete_treatment=False,
                 random_state=42
             )
         else:
             # Sufficient sample size - use Causal Forest DML
+            rf_kwargs = dict(n_estimators=n_estimators, min_samples_leaf=min_samples_leaf,
+                           max_depth=max_depth, max_features='sqrt', random_state=42, n_jobs=-1)
             self.causal_model = CausalForestDML(
-                model_y=RandomForestRegressor(
-                    n_estimators=n_estimators,
-                    min_samples_leaf=min_samples_leaf,
-                    max_depth=max_depth,
-                    max_features='sqrt',  # More stable forests
-                    random_state=42
-                ),
-                model_t=RandomForestRegressor(
-                    n_estimators=n_estimators,
-                    min_samples_leaf=min_samples_leaf,
-                    max_depth=max_depth,
-                    max_features='sqrt',  # More stable forests
-                    random_state=42
-                ),
+                model_y=RandomForestRegressor(**rf_kwargs),
+                model_t=RandomForestRegressor(**rf_kwargs),
                 n_estimators=n_estimators,
                 min_samples_leaf=min_samples_leaf,
                 max_depth=max_depth,
@@ -297,7 +280,6 @@ class HybridCausalSystem:
     def _create_treatment_variables(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
         """Create treatment variables (macro shocks) for causal inference"""
         self._assert_monotonic_dates(df)
-        freq = self._infer_data_frequency(df)
         
         treatment_features = []
         treatments = []
@@ -345,10 +327,10 @@ class HybridCausalSystem:
                 # Use the first treatment variable as primary treatment
                 primary_treatment = np.array(treatments[0])
                 logger.info(f"Created {len(treatment_features)} treatment variables")
+                logger.info(f"Treatments used: {treatment_features}")
                 return primary_treatment, treatment_features
             else:
-                logger.warning("No treatment variables could be created")
-                return np.zeros(len(df)), []
+                raise ValueError("No treatment variables created; check column names and preprocessing.")
                 
         except Exception as e:
             logger.error(f"Error creating treatment variables: {e}")
@@ -387,10 +369,10 @@ class HybridCausalSystem:
                 # Use S&P 500 returns as primary outcome
                 primary_outcome = np.array(outcomes[0])
                 logger.info(f"Created {len(outcome_features)} outcome variables")
+                logger.info(f"Outcomes used: {outcome_features}")
                 return primary_outcome, outcome_features
             else:
-                logger.warning("No outcome variables could be created")
-                return np.zeros(len(df)), []
+                raise ValueError("No outcome variables created; check column names and preprocessing.")
                 
         except Exception as e:
             logger.error(f"Error creating outcome variables: {e}")
@@ -404,8 +386,11 @@ class HybridCausalSystem:
             feature_columns = [col for col in df.columns if col not in exclude_columns]
             
             # Remove treatment and outcome columns from features
-            drop_kw = ('_shock', '_surprise', '_returns', '_stress')
-            feature_columns = [col for col in feature_columns if not any(k in col for k in drop_kw)]
+            drop_kw = ('_shock', '_surprise', '_stress', '_return', '_returns')
+            # Also explicitly drop the engineered outcome aliases if present
+            explicit_drop = {'sp500_returns', 'bond_returns', 'gold_returns'}
+            feature_columns = [col for col in feature_columns 
+                             if not any(k in col for k in drop_kw) and col not in explicit_drop]
             
             # Create feature matrix
             X = df[feature_columns].to_numpy(dtype=np.float64)
@@ -563,7 +548,7 @@ class HybridCausalSystem:
             logger.info("Training uncertainty estimator...")
             
             # Fit quick outcome model on train set, compute residuals
-            base = RandomForestRegressor(n_estimators=200, random_state=42).fit(np.c_[X, T], Y)
+            base = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1).fit(np.c_[X, T], Y)
             resid = Y - base.predict(np.c_[X, T])
             # rolling std as uncertainty proxy (window=60)
             win = 60 if len(resid) > 60 else max(5, len(resid)//5)
@@ -697,8 +682,11 @@ class HybridCausalSystem:
             if len(X) == 0:
                 raise ValueError("No rows left after alignment/NaN filtering. Check rolling windows and required columns.")
             
-            # Step 5: Clip extreme values before scaling to reduce leverage
-            X = np.clip(X, np.percentile(X, 0.1), np.percentile(X, 99.9))
+            # Step 5: Clip extreme values per-feature before scaling to reduce leverage
+            # This avoids squashing small-variance columns
+            lo = np.percentile(X, 0.1, axis=0)
+            hi = np.percentile(X, 99.9, axis=0)
+            X = np.clip(X, lo, hi)
             
             # Step 6: Fit global scaler and transform X for consistent training
             self.scaler = StandardScaler().fit(X)
@@ -711,6 +699,10 @@ class HybridCausalSystem:
             # Step 7: Train PyTorch components - also with scaled data
             self._train_regime_classifier(X_scaled, Y, T)
             self._train_uncertainty_estimator(X_scaled, T, Y)
+            
+            # Ensure models are in eval mode for inference
+            self.regime_classifier.eval()
+            self.uncertainty_estimator.eval()
             
             # Step 8: Evaluate model performance
             performance_metrics = self._evaluate_model(X, T, Y)
@@ -810,8 +802,8 @@ def save_model_to_s3(model: HybridCausalSystem, execution_id: str, artifacts_buc
         model_artifacts = {
             'model_state': {
                 'causal_model': model.causal_model,
-                'regime_classifier_state': model.regime_classifier.state_dict() if model.regime_classifier else None,
-                'uncertainty_estimator_state': model.uncertainty_estimator.state_dict() if model.uncertainty_estimator else None,
+                'regime_classifier_state': {k: v.detach().cpu() for k,v in model.regime_classifier.state_dict().items()} if model.regime_classifier else None,
+                'uncertainty_estimator_state': {k: v.detach().cpu() for k,v in model.uncertainty_estimator.state_dict().items()} if model.uncertainty_estimator else None,
             },
             'scaler': model.scaler,
             'feature_columns': model.feature_columns,
