@@ -9,7 +9,8 @@ import sys
 import argparse
 import logging
 import json
-import pickle
+import io
+import joblib
 from datetime import datetime
 from typing import Dict, Any, Optional, Tuple, List
 import warnings
@@ -21,27 +22,35 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.base import clone
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-from torch.profiler import profile, record_function, ProfilerActivity
 
 import boto3
 from botocore.exceptions import ClientError
 
 # Core causal inference
 from econml.dml import CausalForestDML
-from econml.metalearners import XLearner
 from econml.dml import LinearDML
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,  # Only warnings and errors during collection
+    level=logging.INFO,  # Changed to INFO so training messages show up
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Set random seeds for reproducibility
+np.random.seed(42)
+torch.manual_seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+    # Set cuDNN determinism for bit-wise reproducibility
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def validate_training_data_paths(gold_bucket: str, execution_id: str) -> bool:
     """Validate that training data exists in the expected S3 paths"""
@@ -94,7 +103,7 @@ def validate_artifacts_bucket(artifacts_bucket: str) -> bool:
             s3_client.put_object(
                 Bucket=artifacts_bucket,
                 Key=f"{models_folder}.keep",
-                Body='',
+                Body=b'',  # Fixed: use bytes for .keep
                 ContentType='text/plain'
             )
             logger.info(f"Ensured models folder exists: {models_folder}")
@@ -107,36 +116,61 @@ def validate_artifacts_bucket(artifacts_bucket: str) -> bool:
         logger.error(f"Error validating artifacts bucket: {e}")
         return False
 
-class AttentionRegimeClassifier(nn.Module):
-    """Self-attention regime classifier for identifying market states"""
+# Note: We use MLP instead of attention because:
+# 1. Each training example is a single feature vector (not a sequence)
+# 2. Attention with seq_len=1 degenerates to an expensive identity transform
+# 3. MLP provides the same expressive power for flat feature vectors
+# 4. If you need temporal attention later, feed sliding windows of past data
+#
+# The improved MLP architecture provides:
+# - Deeper network with configurable layers for better expressiveness
+# - Layer normalization for stable training (batch-size agnostic)
+# - Xavier weight initialization for better convergence
+# - Graceful handling of both 2D and 3D inputs
+# - SiLU activation for smoother gradients
+class RegimeClassifier(nn.Module):
+    """Regime classifier for identifying market states - efficient MLP architecture"""
     
-    def __init__(self, input_size: int = 20, hidden_size: int = 32, n_regimes: int = 3, 
-                 attention_heads: int = 4, dropout: float = 0.3):
+    def __init__(self, input_size: int = 20, hidden_size: int = 64, n_regimes: int = 3, 
+                 dropout: float = 0.3, n_layers: int = 3):
         super().__init__()
-        self.embedding = nn.Linear(input_size, hidden_size)
-        self.attention = nn.MultiheadAttention(hidden_size, num_heads=attention_heads, 
-                                             dropout=dropout, batch_first=True)
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size // 2, n_regimes),
-            nn.Softmax(dim=1)
-        )
+        
+        # Build a deeper, more expressive MLP with constant hidden size
+        blocks = []
+        in_f = input_size
+        
+        for i in range(n_layers - 1):
+            blocks += [
+                nn.Linear(in_f, hidden_size), 
+                nn.LayerNorm(hidden_size),  # More stable than BatchNorm for small datasets
+                nn.SiLU(),  # Smoother than ReLU
+                nn.Dropout(dropout)
+            ]
+            in_f = hidden_size
+        
+        # Final layer outputs logits (no activation, no normalization)
+        blocks += [nn.Linear(in_f, n_regimes)]
+        
+        self.net = nn.Sequential(*blocks)
+        
+        # Initialize weights for better training
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize weights using Xavier/Glorot initialization for better training"""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.zeros_(m.bias)
     
     def forward(self, x):
-        # x shape: (batch_size, seq_len, input_size)
-        if len(x.shape) == 2:
-            x = x.unsqueeze(1)  # Add sequence dimension
+        # Handle both 2D and 3D inputs gracefully
+        if x.ndim == 3:
+            x = x.squeeze(1)  # Remove sequence dimension if present
+        elif x.ndim != 2:
+            raise ValueError(f"Expected 2D or 3D input, got {x.ndim}D")
         
-        embedded = self.embedding(x)  # (batch_size, seq_len, hidden_size)
-        attended, _ = self.attention(embedded, embedded, embedded)
-        attended = self.dropout(attended)
-        
-        # Global average pooling over sequence dimension
-        pooled = attended.mean(dim=1)  # (batch_size, hidden_size)
-        return self.classifier(pooled)
+        return self.net(x)
 
 class UncertaintyEstimator(nn.Module):
     """Neural network for estimating uncertainty in causal effects"""
@@ -169,98 +203,138 @@ class HybridCausalSystem:
         self.uncertainty_estimator = None
         
         # Data preprocessing
-        self.scaler = StandardScaler()
+        self.scaler = None  # Will be fitted during training
         self.feature_columns = []
         
         # Training results
         self.training_results = {}
         
+        # Device setup
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+    def _assert_monotonic_dates(self, df: pd.DataFrame):
+        """Assert that dates are monotonically increasing for safe rolling operations"""
+        if 'date' in df.columns:
+            d = pd.to_datetime(df['date'])
+            if not d.is_monotonic_increasing:
+                raise ValueError("Input not sorted by date; sort before rolling/diff.")
+    
+    def _infer_data_frequency(self, df: pd.DataFrame) -> str:
+        """Infer the frequency of the data for proper window sizing"""
+        if 'date' in df.columns:
+            try:
+                freq = pd.infer_freq(pd.to_datetime(df['date']))
+                logger.info(f"Inferred data frequency: {freq}")
+                return freq
+            except Exception:
+                logger.warning("Could not infer data frequency, using default windows")
+        return None
+    
     def _initialize_causal_model(self, X: np.ndarray, T: np.ndarray, Y: np.ndarray):
         """Initialize the appropriate causal model based on data characteristics"""
         n_samples = len(X)
+        
+        # Validate config parameters
+        n_estimators = max(100, self.config['causal_model'].get('n_estimators', 100))
+        min_samples_leaf = max(5, self.config['causal_model'].get('min_samples_leaf', 10))
+        max_depth = self.config['causal_model'].get('max_depth', 10)
+        
+        logger.info(f"Initializing causal model with n_estimators={n_estimators}, min_samples_leaf={min_samples_leaf}, max_depth={max_depth}")
         
         if n_samples < 100:
             # Small sample size - use Linear DML
             logger.warning("Small sample size, using Linear DML instead of Causal Forest")
             self.causal_model = LinearDML(
-                model_y=RandomForestRegressor(n_estimators=50, random_state=42),
-                model_t=RandomForestRegressor(n_estimators=50, random_state=42)
+                model_y=RandomForestRegressor(n_estimators=n_estimators, random_state=42),
+                model_t=RandomForestRegressor(n_estimators=n_estimators, random_state=42),
+                discrete_treatment=False,
+                random_state=42
             )
         else:
             # Sufficient sample size - use Causal Forest DML
             self.causal_model = CausalForestDML(
                 model_y=RandomForestRegressor(
-                    n_estimators=self.config['causal_model']['n_estimators'],
-                    min_samples_leaf=self.config['causal_model']['min_samples_leaf'],
-                    max_depth=self.config['causal_model']['max_depth'],
+                    n_estimators=n_estimators,
+                    min_samples_leaf=min_samples_leaf,
+                    max_depth=max_depth,
+                    max_features='sqrt',  # More stable forests
                     random_state=42
                 ),
                 model_t=RandomForestRegressor(
-                    n_estimators=self.config['causal_model']['n_estimators'],
-                    min_samples_leaf=self.config['causal_model']['min_samples_leaf'],
-                    max_depth=self.config['causal_model']['max_depth'],
+                    n_estimators=n_estimators,
+                    min_samples_leaf=min_samples_leaf,
+                    max_depth=max_depth,
+                    max_features='sqrt',  # More stable forests
                     random_state=42
                 ),
-                n_estimators=self.config['causal_model']['n_estimators'],
-                min_samples_leaf=self.config['causal_model']['min_samples_leaf'],
-                max_depth=self.config['causal_model']['max_depth']
+                n_estimators=n_estimators,
+                min_samples_leaf=min_samples_leaf,
+                max_depth=max_depth,
+                discrete_treatment=False,
+                random_state=42
             )
     
     def _initialize_pytorch_components(self, X: np.ndarray):
         """Initialize PyTorch regime classifier and uncertainty estimator"""
         input_size = X.shape[1]
         
-        # Regime classifier
-        self.regime_classifier = AttentionRegimeClassifier(
+        # Regime classifier (improved MLP)
+        self.regime_classifier = RegimeClassifier(
             input_size=input_size,
             hidden_size=self.config['regime_classifier']['hidden_size'],
             n_regimes=self.config['regime_classifier']['n_regimes'],
-            attention_heads=self.config['regime_classifier']['attention_heads'],
-            dropout=self.config['regime_classifier']['dropout']
-        )
+            dropout=self.config['regime_classifier']['dropout'],
+            n_layers=self.config['regime_classifier'].get('n_layers', 3)
+        ).to(self.device)
         
         # Uncertainty estimator
         self.uncertainty_estimator = UncertaintyEstimator(
             input_size=input_size,
             hidden_size=self.config['uncertainty_estimator']['hidden_size'],
             dropout=self.config['uncertainty_estimator']['dropout']
-        )
+        ).to(self.device)
     
     def _create_treatment_variables(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
         """Create treatment variables (macro shocks) for causal inference"""
+        self._assert_monotonic_dates(df)
+        freq = self._infer_data_frequency(df)
+        
         treatment_features = []
         treatments = []
         
         try:
             # Fed Rate Shock
             if 'fred_FEDFUNDS_lag_30d' in df.columns:
-                fed_rate = df['fred_FEDFUNDS_lag_30d']
+                fed_rate = df['fred_FEDFUNDS_lag_30d'].astype(float)
                 fed_shock = fed_rate.diff(30)  # 30-day change
+                fed_shock = fed_shock.replace([np.inf, -np.inf], np.nan)
                 df['fed_rate_shock'] = fed_shock
                 treatment_features.append('fed_rate_shock')
                 treatments.append(fed_shock.values)
             
             # CPI Surprise
             if 'fred_CPIAUCSL_lag_30d' in df.columns:
-                cpi = df['fred_CPIAUCSL_lag_30d']
+                cpi = df['fred_CPIAUCSL_lag_30d'].astype(float)
                 cpi_trend = cpi.rolling(12).mean()  # 12-month trend
-                cpi_shock = (cpi - cpi_trend) / cpi_trend
+                cpi_shock = (cpi - cpi_trend) / (cpi_trend.replace(0, np.nan))
+                cpi_shock = cpi_shock.replace([np.inf, -np.inf], np.nan)
                 df['cpi_surprise'] = cpi_shock
                 treatment_features.append('cpi_surprise')
                 treatments.append(cpi_shock.values)
             
             # GDP Surprise
             if 'fred_GDP_lag_30d' in df.columns:
-                gdp = df['fred_GDP_lag_30d']
+                gdp = df['fred_GDP_lag_30d'].astype(float)
                 gdp_trend = gdp.rolling(8).mean()  # 8-quarter trend
-                gdp_shock = (gdp - gdp_trend) / gdp_trend
+                gdp_shock = (gdp - gdp_trend) / (gdp_trend.replace(0, np.nan))
+                gdp_shock = gdp_shock.replace([np.inf, -np.inf], np.nan)
                 df['gdp_surprise'] = gdp_shock
                 treatment_features.append('gdp_surprise')
                 treatments.append(gdp_shock.values)
             
             # Market Stress (VIX-based)
             if 'yahoo_^VIX_volatility_30d' in df.columns:
-                vix_vol = df['yahoo_^VIX_volatility_30d']
+                vix_vol = df['yahoo_^VIX_volatility_30d'].astype(float)
                 vix_threshold = vix_vol.quantile(0.8)
                 market_stress = (vix_vol > vix_threshold).astype(float)
                 df['market_stress'] = market_stress
@@ -282,27 +356,29 @@ class HybridCausalSystem:
     
     def _create_outcome_variables(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
         """Create outcome variables (asset returns) for causal inference"""
+        self._assert_monotonic_dates(df)
+        
         outcome_features = []
         outcomes = []
         
         try:
             # S&P 500 returns
             if 'yahoo_^GSPC_return_30d' in df.columns:
-                sp500_returns = df['yahoo_^GSPC_return_30d']
+                sp500_returns = df['yahoo_^GSPC_return_30d'].astype(float)
                 df['sp500_returns'] = sp500_returns
                 outcome_features.append('sp500_returns')
                 outcomes.append(sp500_returns.values)
             
             # Bond returns (TLT)
             if 'yahoo_TLT_return_30d' in df.columns:
-                bond_returns = df['yahoo_TLT_return_30d']
+                bond_returns = df['yahoo_TLT_return_30d'].astype(float)
                 df['bond_returns'] = bond_returns
                 outcome_features.append('bond_returns')
                 outcomes.append(bond_returns.values)
             
             # Gold returns
             if 'yahoo_GLD_return_30d' in df.columns:
-                gold_returns = df['yahoo_GLD_return_30d']
+                gold_returns = df['yahoo_GLD_return_30d'].astype(float)
                 df['gold_returns'] = gold_returns
                 outcome_features.append('gold_returns')
                 outcomes.append(gold_returns.values)
@@ -321,41 +397,80 @@ class HybridCausalSystem:
             return np.zeros(len(df)), []
     
     def _prepare_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
-        """Prepare feature matrix for training"""
+        """Prepare feature matrix for training - DO NOT fit scaler here"""
         try:
             # Get all feature columns (exclude metadata and target columns)
             exclude_columns = ['date', 'execution_id', 'feature_creation_timestamp', 'target']
             feature_columns = [col for col in df.columns if col not in exclude_columns]
             
             # Remove treatment and outcome columns from features
-            treatment_outcome_cols = []
-            for col in df.columns:
-                if any(keyword in col for keyword in ['_shock', '_surprise', '_returns', '_stress']):
-                    treatment_outcome_cols.append(col)
-            
-            feature_columns = [col for col in feature_columns if col not in treatment_outcome_cols]
+            drop_kw = ('_shock', '_surprise', '_returns', '_stress')
+            feature_columns = [col for col in feature_columns if not any(k in col for k in drop_kw)]
             
             # Create feature matrix
-            X = df[feature_columns].values
+            X = df[feature_columns].to_numpy(dtype=np.float64)
             
             # Handle missing values
-            X = np.nan_to_num(X, nan=0.0)
-            X = np.where(np.isinf(X), 0, X)
-            
-            # Scale features
-            X_scaled = self.scaler.fit_transform(X)
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             
             self.feature_columns = feature_columns
-            logger.info(f"Prepared {len(feature_columns)} features with shape {X_scaled.shape}")
+            logger.info(f"Prepared {len(feature_columns)} features with shape {X.shape}")
             
-            return X_scaled, feature_columns
+            return X, feature_columns
             
         except Exception as e:
             logger.error(f"Error preparing features: {e}")
             raise
     
+    def _finalize_training_arrays(self, df: pd.DataFrame, T: np.ndarray, Y: np.ndarray, X: np.ndarray):
+        """Enforce chronological order and align arrays to remove NaNs"""
+        # enforce chronological order
+        if 'date' in df.columns:
+            order = np.argsort(pd.to_datetime(df['date']).values)
+            df = df.iloc[order].reset_index(drop=True)
+            T = T[order]
+            Y = Y[order] 
+            X = X[order]
+
+        # valid mask: finite T & Y and finite X rows
+        valid = np.isfinite(T) & np.isfinite(Y) & np.all(np.isfinite(X), axis=1)
+        # also drop early rows lost to rolling windows (NaNs)
+        
+        # Log how many rows were dropped
+        n_dropped = len(X) - np.sum(valid)
+        if n_dropped > 0:
+            logger.info(f"Dropped {n_dropped} rows due to NaN values in treatment/outcome/features")
+        
+        return X[valid], T[valid], Y[valid], valid
+    
+    def _policy_value(self, Y: np.ndarray, T: np.ndarray, tau: np.ndarray, q: float = 0.2, t_quant: float = 0.7) -> float:
+        """Calculate policy value: realized outcome differential for top-q% by treatment effect"""
+        # TODO: Consider implementing doubly-robust policy value with propensity/outcome models
+        # for more robust evaluation of continuous treatments
+        
+        # Ensure inputs are arrays and handle NaNs
+        tau = np.asarray(tau)
+        m = np.isfinite(tau) & np.isfinite(T) & np.isfinite(Y)
+        tau, T, Y = tau[m], T[m], Y[m]
+        
+        if len(tau) == 0:
+            return np.nan
+            
+        # top-q by tau
+        k = max(1, int(len(tau) * q))
+        idx = np.argsort(tau)[-k:]
+
+        # define 'treated' as large positive shocks using quantiles
+        t_thr = np.quantile(T, t_quant)
+        y1 = Y[idx][T[idx] >= t_thr]
+        y0 = Y[idx][T[idx] < t_thr]
+        
+        if len(y1) == 0 or len(y0) == 0:
+            return np.nan
+        return float(np.nanmean(y1) - np.nanmean(y0))
+    
     def _train_regime_classifier(self, X: np.ndarray, Y: np.ndarray, T: np.ndarray):
-        """Train the PyTorch regime classifier"""
+        """Train the PyTorch regime classifier with early stopping"""
         try:
             logger.info("Training regime classifier...")
             
@@ -372,23 +487,38 @@ class HybridCausalSystem:
                 regime_labels[vix_values > vix_quantiles[0]] = 1  # Medium vol
                 
                 # Convert to tensors
-                X_tensor = torch.FloatTensor(X)
-                regime_tensor = torch.LongTensor(regime_labels)
+                X_tensor = torch.as_tensor(X, dtype=torch.float32, device=self.device)
+                regime_tensor = torch.as_tensor(regime_labels, dtype=torch.long, device=self.device)
                 
-                # Create dataset and dataloader
-                dataset = TensorDataset(X_tensor, regime_tensor)
-                dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+                # Split into train/validation for early stopping
+                n = len(X_tensor)
+                split = int(n * 0.85)
+                train_ds = TensorDataset(X_tensor[:split], regime_tensor[:split])
+                val_ds = TensorDataset(X_tensor[split:], regime_tensor[split:])
+                
+                # Create dataloaders with pin_memory for CUDA
+                pin_memory = self.device.type == 'cuda'
+                train_dl = DataLoader(train_ds, batch_size=64, shuffle=True, pin_memory=pin_memory)
+                val_dl = DataLoader(val_ds, batch_size=256, shuffle=False, pin_memory=pin_memory)
                 
                 # Training setup
                 criterion = nn.CrossEntropyLoss()
                 optimizer = optim.Adam(self.regime_classifier.parameters(), 
                                      lr=0.001, weight_decay=1e-4)
                 
-                # Training loop
+                # Early stopping setup
+                best_val_loss = float('inf')
+                patience = 5
+                bad_epochs = 0
+                
+                # Training loop with early stopping
                 self.regime_classifier.train()
                 for epoch in range(50):
+                    # Training phase
                     total_loss = 0
-                    for batch_X, batch_y in dataloader:
+                    for batch_X, batch_y in train_dl:
+                        batch_X = batch_X.to(self.device)
+                        batch_y = batch_y.to(self.device)
                         optimizer.zero_grad()
                         outputs = self.regime_classifier(batch_X)
                         loss = criterion(outputs, batch_y)
@@ -396,8 +526,31 @@ class HybridCausalSystem:
                         optimizer.step()
                         total_loss += loss.item()
                     
+                    # Validation phase
+                    self.regime_classifier.eval()
+                    val_loss = 0.0
+                    with torch.no_grad():
+                        for batch_X, batch_y in val_dl:
+                            batch_X = batch_X.to(self.device)
+                            batch_y = batch_y.to(self.device)
+                            outputs = self.regime_classifier(batch_X)
+                            val_loss += criterion(outputs, batch_y).item()
+                    
+                    # Early stopping logic
+                    if val_loss < best_val_loss - 1e-4:
+                        best_val_loss = val_loss
+                        bad_epochs = 0
+                    else:
+                        bad_epochs += 1
+                    
                     if epoch % 10 == 0:
-                        logger.info(f"Regime classifier epoch {epoch}, loss: {total_loss/len(dataloader):.4f}")
+                        logger.info(f"Regime classifier epoch {epoch}, train_loss: {total_loss/len(train_dl):.4f}, val_loss: {val_loss/len(val_dl):.4f}")
+                    
+                    if bad_epochs >= patience:
+                        logger.info(f"Early stopping at epoch {epoch}")
+                        break
+                    
+                    self.regime_classifier.train()
                 
                 logger.info("Regime classifier training completed")
                 
@@ -405,37 +558,51 @@ class HybridCausalSystem:
             logger.error(f"Error training regime classifier: {e}")
     
     def _train_uncertainty_estimator(self, X: np.ndarray, T: np.ndarray, Y: np.ndarray):
-        """Train the PyTorch uncertainty estimator"""
+        """Train the PyTorch uncertainty estimator with improved uncertainty labels and early stopping"""
         try:
             logger.info("Training uncertainty estimator...")
             
-            # Create uncertainty labels based on treatment effect variability
-            # Simple heuristic: higher uncertainty when treatment effects vary more
-            treatment_effects = np.abs(T) * np.abs(Y)  # Simple proxy for treatment effect
-            uncertainty_labels = np.std(treatment_effects) * np.ones(len(X))
-            
-            # Add some noise to make it more realistic
-            uncertainty_labels += np.random.normal(0, 0.01, len(uncertainty_labels))
-            uncertainty_labels = np.maximum(uncertainty_labels, 0.001)  # Ensure positive
+            # Fit quick outcome model on train set, compute residuals
+            base = RandomForestRegressor(n_estimators=200, random_state=42).fit(np.c_[X, T], Y)
+            resid = Y - base.predict(np.c_[X, T])
+            # rolling std as uncertainty proxy (window=60)
+            win = 60 if len(resid) > 60 else max(5, len(resid)//5)
+            u = pd.Series(resid).rolling(win, min_periods=win//2).std().fillna(method='bfill').values
+            u = np.clip(u, np.percentile(u, 5), np.percentile(u, 95))  # robustify
             
             # Convert to tensors
-            X_tensor = torch.FloatTensor(X)
-            uncertainty_tensor = torch.FloatTensor(uncertainty_labels)
+            X_tensor = torch.as_tensor(X, dtype=torch.float32, device=self.device)
+            uncertainty_tensor = torch.as_tensor(u, dtype=torch.float32, device=self.device)
             
-            # Create dataset and dataloader
-            dataset = TensorDataset(X_tensor, uncertainty_tensor)
-            dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+            # Split into train/validation for early stopping
+            n = len(X_tensor)
+            split = int(n * 0.85)
+            train_ds = TensorDataset(X_tensor[:split], uncertainty_tensor[:split])
+            val_ds = TensorDataset(X_tensor[split:], uncertainty_tensor[split:])
+            
+            # Create dataloaders with pin_memory for CUDA
+            pin_memory = self.device.type == 'cuda'
+            train_dl = DataLoader(train_ds, batch_size=64, shuffle=True, pin_memory=pin_memory)
+            val_dl = DataLoader(val_ds, batch_size=256, shuffle=False, pin_memory=pin_memory)
             
             # Training setup
             criterion = nn.MSELoss()
             optimizer = optim.Adam(self.uncertainty_estimator.parameters(), 
                                  lr=0.001, weight_decay=1e-4)
             
-            # Training loop
+            # Early stopping setup
+            best_val_loss = float('inf')
+            patience = 5
+            bad_epochs = 0
+            
+            # Training loop with early stopping
             self.uncertainty_estimator.train()
             for epoch in range(50):
+                # Training phase
                 total_loss = 0
-                for batch_X, batch_uncertainty in dataloader:
+                for batch_X, batch_uncertainty in train_dl:
+                    batch_X = batch_X.to(self.device)
+                    batch_uncertainty = batch_uncertainty.to(self.device)
                     optimizer.zero_grad()
                     outputs = self.uncertainty_estimator(batch_X).squeeze()
                     loss = criterion(outputs, batch_uncertainty)
@@ -443,13 +610,69 @@ class HybridCausalSystem:
                     optimizer.step()
                     total_loss += loss.item()
                 
+                # Validation phase
+                self.uncertainty_estimator.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for batch_X, batch_uncertainty in val_dl:
+                        batch_X = batch_X.to(self.device)
+                        batch_uncertainty = batch_uncertainty.to(self.device)
+                        outputs = self.uncertainty_estimator(batch_X).squeeze()
+                        val_loss += criterion(outputs, batch_uncertainty).item()
+                
+                # Early stopping logic
+                if val_loss < best_val_loss - 1e-4:
+                    best_val_loss = val_loss
+                    bad_epochs = 0
+                else:
+                    bad_epochs += 1
+                
                 if epoch % 10 == 0:
-                    logger.info(f"Uncertainty estimator epoch {epoch}, loss: {total_loss/len(dataloader):.4f}")
+                    logger.info(f"Uncertainty estimator epoch {epoch}, train_loss: {total_loss/len(train_dl):.4f}, val_loss: {val_loss/len(val_dl):.4f}")
+                
+                if bad_epochs >= patience:
+                    logger.info(f"Early stopping at epoch {epoch}")
+                    break
+                
+                self.uncertainty_estimator.train()
             
             logger.info("Uncertainty estimator training completed")
             
         except Exception as e:
             logger.error(f"Error training uncertainty estimator: {e}")
+    
+    def _evaluate_model(self, X: np.ndarray, T: np.ndarray, Y: np.ndarray) -> Dict[str, float]:
+        """Evaluate model performance using policy value metric - uses fold-specific scalers"""
+        try:
+            tscv = TimeSeriesSplit(n_splits=3)
+            pol20 = []
+            
+            for tr, te in tscv.split(X):
+                scaler = StandardScaler()
+                Xtr = scaler.fit_transform(X[tr])
+                Xte = scaler.transform(X[te])
+                
+                # Use clone or fallback to manual construction for econml compatibility
+                try:
+                    m = clone(self.causal_model)
+                except Exception:
+                    # Fallback for econml estimators that don't clone well
+                    m = type(self.causal_model)(**self.causal_model.get_params())
+                
+                m.fit(Y[tr], T[tr], X=Xtr)
+                tau = m.effect(Xte)
+                pol20.append(self._policy_value(Y[te], T[te], tau, q=0.2))
+            
+            # CRITICAL: DO NOT overwrite self.scaler here - it's already set in train()
+            # This prevents data leakage and ensures consistent scaling between training and inference
+            return {
+                "policy@20%_mean": float(np.nanmean(pol20)), 
+                "policy@20%_std": float(np.nanstd(pol20))
+            }
+            
+        except Exception as e:
+            logger.error(f"Error evaluating model: {e}")
+            return {"policy@20%_mean": np.nan, "policy@20%_std": np.nan}
     
     def train(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Train the complete hybrid causal inference system"""
@@ -460,25 +683,39 @@ class HybridCausalSystem:
             T, treatment_features = self._create_treatment_variables(df)
             Y, outcome_features = self._create_outcome_variables(df)
             
-            # Step 2: Prepare features
+            # Step 2: Prepare features (no scaling yet)
             X, feature_columns = self._prepare_features(df)
             
             # Step 3: Initialize models
             self._initialize_causal_model(X, T, Y)
             self._initialize_pytorch_components(X)
             
-            # Step 4: Train core causal model (econml)
+            # Step 4: Finalize arrays (sort by date and remove NaNs)
+            X, T, Y, valid_mask = self._finalize_training_arrays(df, T, Y, X)
+            
+            # Fail fast if no data remains after filtering
+            if len(X) == 0:
+                raise ValueError("No rows left after alignment/NaN filtering. Check rolling windows and required columns.")
+            
+            # Step 5: Clip extreme values before scaling to reduce leverage
+            X = np.clip(X, np.percentile(X, 0.1), np.percentile(X, 99.9))
+            
+            # Step 6: Fit global scaler and transform X for consistent training
+            self.scaler = StandardScaler().fit(X)
+            X_scaled = self.scaler.transform(X)
+            
+            # Step 6: Train core causal model (econml) - now with scaled data
             logger.info("Training core causal model...")
-            self.causal_model.fit(Y, T, X=X)
+            self.causal_model.fit(Y, T, X=X_scaled)
             
-            # Step 5: Train PyTorch components
-            self._train_regime_classifier(X, Y, T)
-            self._train_uncertainty_estimator(X, T, Y)
+            # Step 7: Train PyTorch components - also with scaled data
+            self._train_regime_classifier(X_scaled, Y, T)
+            self._train_uncertainty_estimator(X_scaled, T, Y)
             
-            # Step 6: Evaluate model performance
+            # Step 8: Evaluate model performance
             performance_metrics = self._evaluate_model(X, T, Y)
             
-            # Step 7: Generate training summary
+            # Step 9: Generate training summary
             training_summary = {
                 'n_samples': len(X),
                 'n_features': len(feature_columns),
@@ -486,7 +723,17 @@ class HybridCausalSystem:
                 'n_outcomes': len(outcome_features),
                 'performance_metrics': performance_metrics,
                 'training_timestamp': datetime.now().isoformat(),
-                'model_config': self.config
+                'model_config': self.config,
+                'feature_columns': self.feature_columns,
+                'training_mask': valid_mask.astype(bool).tolist(),  # Fixed: convert to list for JSON
+                'dtypes': {c: str(df[c].dtype) for c in df.columns},
+                'regime_names': {"0": "low_vol", "1": "med_vol", "2": "high_vol"},
+                'pytorch_spec': {
+                    'input_size': int(len(self.feature_columns)),
+                    'regime_config': self.config['regime_classifier'],
+                    'uncertainty_config': self.config['uncertainty_estimator'],
+                    'architecture_note': 'MLP-based regime classifier (no attention needed for flat feature vectors)'
+                }
             }
             
             self.training_results = training_summary
@@ -498,48 +745,13 @@ class HybridCausalSystem:
             logger.error(f"Error during training: {e}")
             raise
     
-    def _evaluate_model(self, X: np.ndarray, T: np.ndarray, Y: np.ndarray) -> Dict[str, float]:
-        """Evaluate model performance"""
-        try:
-            # Time series split for evaluation
-            tscv = TimeSeriesSplit(n_splits=3)
-            
-            mse_scores = []
-            r2_scores = []
-            
-            for train_idx, test_idx in tscv.split(X):
-                X_train, X_test = X[train_idx], X[test_idx]
-                T_train, T_test = T[train_idx], T[test_idx]
-                Y_train, Y_test = Y[train_idx], Y[test_idx]
-                
-                # Fit on training data
-                self.causal_model.fit(Y_train, T_train, X=X_train)
-                
-                # Predict on test data
-                effects = self.causal_model.effect(X_test)
-                
-                # Calculate metrics
-                mse = mean_squared_error(Y_test, effects)
-                r2 = r2_score(Y_test, effects)
-                
-                mse_scores.append(mse)
-                r2_scores.append(r2)
-            
-            return {
-                'mean_mse': np.mean(mse_scores),
-                'std_mse': np.std(mse_scores),
-                'mean_r2': np.mean(r2_scores),
-                'std_r2': np.std(r2_scores)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error evaluating model: {e}")
-            return {'mean_mse': float('inf'), 'mean_r2': 0.0}
-    
-    def predict(self, X_new: np.ndarray, T_new: np.ndarray) -> Dict[str, Any]:
+    def predict(self, X_new: np.ndarray) -> Dict[str, Any]:
         """Generate predictions using the trained hybrid system"""
         try:
-            # Scale new features
+            # Scale new features using fitted scaler
+            if self.scaler is None:
+                raise ValueError("Scaler not fitted. Train the model first.")
+            
             X_new_scaled = self.scaler.transform(X_new)
             
             # Get causal effects from econml model
@@ -548,12 +760,14 @@ class HybridCausalSystem:
             # Get regime probabilities from PyTorch classifier
             self.regime_classifier.eval()
             with torch.no_grad():
-                regime_probs = self.regime_classifier(torch.FloatTensor(X_new_scaled)).numpy()
+                X_tensor = torch.as_tensor(X_new_scaled, dtype=torch.float32, device=self.device)
+                logits = self.regime_classifier(X_tensor)              # [B, n_regimes]
+                regime_probs = torch.softmax(logits, dim=1).cpu().numpy()
             
             # Get uncertainty estimates from PyTorch estimator
             self.uncertainty_estimator.eval()
             with torch.no_grad():
-                uncertainty = self.uncertainty_estimator(torch.FloatTensor(X_new_scaled)).numpy().flatten()
+                uncertainty = self.uncertainty_estimator(X_tensor).cpu().numpy().flatten()
             
             # Determine dominant regime
             dominant_regime = np.argmax(regime_probs, axis=1)
@@ -570,14 +784,15 @@ class HybridCausalSystem:
             raise
 
 def load_data_from_s3(bucket_name: str, execution_id: str) -> pd.DataFrame:
-    """Load processed data from S3 Gold bucket"""
+    """Load processed data from S3 Gold bucket - Fixed S3 parquet loading"""
     try:
         s3_client = boto3.client('s3')
         
         # Load gold data
         gold_key = f"gold/{execution_id}/processed_data.parquet"
         response = s3_client.get_object(Bucket=bucket_name, Key=gold_key)
-        df = pd.read_parquet(response['Body'])
+        with io.BytesIO(response["Body"].read()) as buf:
+            df = pd.read_parquet(buf)
         
         logger.info(f"Loaded data with shape: {df.shape}")
         return df
@@ -587,7 +802,7 @@ def load_data_from_s3(bucket_name: str, execution_id: str) -> pd.DataFrame:
         raise
 
 def save_model_to_s3(model: HybridCausalSystem, execution_id: str, artifacts_bucket: str):
-    """Save trained model and artifacts to S3"""
+    """Save trained model and artifacts to S3 with robust S3 writes"""
     try:
         s3_client = boto3.client('s3')
         
@@ -602,16 +817,31 @@ def save_model_to_s3(model: HybridCausalSystem, execution_id: str, artifacts_buc
             'feature_columns': model.feature_columns,
             'training_results': model.training_results,
             'training_timestamp': datetime.now().isoformat(),
-            'execution_id': execution_id
+            'execution_id': execution_id,
+            'versions': {
+                'sklearn': sklearn.__version__,
+                'econml': econml.__version__,
+                'torch': torch.__version__,
+                'numpy': np.__version__,
+                'pandas': pd.__version__
+            }
         }
         
-        # Save to S3
+        # Save to S3 using joblib for better compression
         artifacts_key = f"models/{execution_id}/hybrid_causal_model.pkl"
-        s3_client.put_object(
-            Bucket=artifacts_bucket,
-            Key=artifacts_key,
-            Body=pickle.dumps(model_artifacts)
-        )
+        buf_path = f"/tmp/hybrid_{execution_id}.pkl"
+        joblib.dump(model_artifacts, buf_path, compress=3)
+        
+        with open(buf_path, "rb") as fh:
+            s3_client.put_object(
+                Bucket=artifacts_bucket,
+                Key=artifacts_key,
+                Body=fh.read(),
+                ContentType='application/octet-stream'
+            )
+        
+        # Clean up temp file
+        os.remove(buf_path)
         
         logger.info(f"Model artifacts saved to s3://{artifacts_bucket}/{artifacts_key}")
         
@@ -641,18 +871,18 @@ def main():
         logger.info("Loading training data...")
         df = load_data_from_s3(args.gold_bucket, args.execution_id)
         
-        # Define model configuration
+        # Define model configuration with validation
         config = {
             'causal_model': {
-                'n_estimators': 100,
+                'n_estimators': 200,  # Increased from 100
                 'min_samples_leaf': 10,
                 'max_depth': 10
             },
             'regime_classifier': {
-                'hidden_size': 32,
+                'hidden_size': 64,  # Increased from 32 for better expressiveness
                 'n_regimes': 3,
-                'attention_heads': 4,
-                'dropout': 0.3
+                'dropout': 0.3,
+                'n_layers': 3  # Configurable depth
             },
             'uncertainty_estimator': {
                 'hidden_size': 32,
