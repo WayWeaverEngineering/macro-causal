@@ -3,7 +3,6 @@ import { QueryInput } from '../components/QueryInput';
 import { AnalysisStatus } from '../components/AnalysisStatus';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
 import { Header } from '../components/Header';
-import { CurrentStepNotification } from '../components/CurrentStepNotification';
 import { useState } from 'react';
 import PipelineSvg from '../images/ml-pipeline-success.svg';
 
@@ -77,7 +76,7 @@ function MacroAnalyst() {
           <AnalysisStatus />
           <CausalAnalysisResults />
         </Container>
-        <CurrentStepNotification />
+        {/* Progress update modal removed */}
 
         <Dialog
           open={openPipelineDialog}

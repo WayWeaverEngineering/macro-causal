@@ -88,8 +88,8 @@ export const CausalAnalysisResults = () => {
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1, textAlign: 'center' }}>
-                  <Typography variant="h4" sx={{ color: getConfidenceColor(analysis?.causalEffect?.confidenceInterval?.[0] ?? 0), fontWeight: 600 }}>
-                    {formatConfidence(analysis?.causalEffect?.confidenceInterval?.[0] ?? 0)}
+                  <Typography variant="h4" sx={{ color: getConfidenceColor(analysis?.uncertainty?.confidence ?? 0), fontWeight: 600 }}>
+                    {formatConfidence(analysis?.uncertainty?.confidence ?? 0)}
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#aaa' }}>
                     Confidence Level
@@ -177,6 +177,40 @@ export const CausalAnalysisResults = () => {
                 <Typography variant="body2" sx={{ color: '#ccc', mb: 2 }}>
                   The system identifies different market states where causal relationships behave differently.
                 </Typography>
+                <Box sx={{ backgroundColor: '#1a1a1a', border: '1px solid #333', p: 2, borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#aaa', mb: 1, fontWeight: 500 }}>
+                    Regime definitions (by volatility context):
+                  </Typography>
+                  <List sx={{ p: 0 }}>
+                    <ListItem sx={{ px: 0, py: 0.5 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#ccc' }}>
+                            • Regime 0: Low volatility conditions (calmer markets)
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    <ListItem sx={{ px: 0, py: 0.5 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#ccc' }}>
+                            • Regime 1: Medium volatility conditions
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                    <ListItem sx={{ px: 0, py: 0.5 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ color: '#ccc' }}>
+                            • Regime 2: High volatility conditions (stressed markets)
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  </List>
+                </Box>
               </Box>
               
                              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, flexWrap: 'wrap' }}>

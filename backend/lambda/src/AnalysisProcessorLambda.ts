@@ -134,7 +134,7 @@ async function updateExecutionStep(
   }
 }
 
-// Step 1: Convert user query to model inputs using OpenAI
+// Step 1: Convert user query to model inputs
 async function convertQueryToModelInputs(
   query: string, 
   openAIService: OpenAIService
@@ -216,7 +216,7 @@ async function executeModelInference(
   }
 }
 
-// Step 3: Generate final response using OpenAI
+// Step 3: Generate final response
 async function generateFinalResponse(
   query: string, 
   modelResults: any, 
@@ -286,7 +286,7 @@ async function processMacroCausalAnalysis(
     const queryStep: ExecutionStep = {
       stepId: 'step_1',
       stepName: 'Query Analysis & Input Generation',
-      description: 'Converting natural language query to structured model inputs using OpenAI',
+      description: 'Converting natural language query to structured model inputs',
       status: 'in_progress',
       startTime: new Date(),
       metadata: { query }
@@ -324,7 +324,7 @@ async function processMacroCausalAnalysis(
     const responseStep: ExecutionStep = {
       stepId: 'step_3',
       stepName: 'Response Generation',
-      description: 'Generating comprehensive analysis response using OpenAI',
+      description: 'Generating comprehensive analysis response',
       status: 'in_progress',
       startTime: new Date(),
       metadata: { modelResults }
