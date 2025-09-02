@@ -27,13 +27,11 @@ import {
 } from '../actions/analysisActions';
 import { 
   setLoadingWithMessage, 
-  showProgressBar, 
-  hideProgressBar,
   showError,
-  updateProgressBar,
 } from '../actions/uiActions';
 import { addRecentQuery } from '../actions/userActions';
 import { RootState } from '../store';
+import { mapBackendResultToCausalAnalysis } from '../utils/mapBackendToFrontend';
 
 /**
  * Thunk to submit an analysis request
@@ -53,7 +51,6 @@ export const submitAnalysisThunk = createAsyncThunk(
       dispatch(setSessionId(sessionId));
       dispatch(setUserQuery(query));
       dispatch(setLoadingWithMessage({ isLoading: true, message: 'Submitting analysis request...' }));
-      dispatch(showProgressBar(0));
       
       // Submit request to backend
       const response = await submitAnalysisRequest(query, { 
@@ -63,7 +60,6 @@ export const submitAnalysisThunk = createAsyncThunk(
       if (!response.success) {
         dispatch(analysisFailed(response.message || 'Analysis request failed'));
         dispatch(setLoadingWithMessage({ isLoading: false }));
-        dispatch(hideProgressBar());
         dispatch(showError(response.message || 'Analysis request failed'));
         return response;
       }
@@ -72,7 +68,6 @@ export const submitAnalysisThunk = createAsyncThunk(
         const errorMsg = 'No execution ID received from backend';
         dispatch(analysisFailed(errorMsg));
         dispatch(setLoadingWithMessage({ isLoading: false }));
-        dispatch(hideProgressBar());
         dispatch(showError(errorMsg));
         return { success: false, message: errorMsg };
       }
@@ -91,7 +86,6 @@ export const submitAnalysisThunk = createAsyncThunk(
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       dispatch(analysisFailed(errorMessage));
       dispatch(setLoadingWithMessage({ isLoading: false }));
-      dispatch(hideProgressBar());
       dispatch(showError(errorMessage));
       throw error;
     }
@@ -118,7 +112,6 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
         if (!response.success) {
           dispatch(analysisFailed(response.message || 'Status check failed'));
           dispatch(setLoadingWithMessage({ isLoading: false }));
-          dispatch(hideProgressBar());
           dispatch(showError(response.message || 'Status check failed'));
           return response;
         }
@@ -158,17 +151,19 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
         const totalSteps = steps.length;
         const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
         
-        dispatch(updateProgressBar({ progress, message: currentStep?.description || 'Processing...' }));
         dispatch(updateAnalysisProgress({ progress, message: currentStep?.description || 'Processing...' }));
         
         // Check if analysis is complete or failed
         if (status === 'completed') {
           // Set final results
           if (response.result) {
-            dispatch(setAnalysisResult(response.result));
-          }
-          if (response.metadata) {
-            dispatch(setAnalysisMetadata(response.metadata));
+            const mapped = mapBackendResultToCausalAnalysis(response.result);
+            if (mapped) {
+              dispatch(setAnalysisResult(mapped));
+            }
+            if (response.result.metadata) {
+              dispatch(setAnalysisMetadata(response.result.metadata));
+            }
           }
           if (response.macroVariables) {
             dispatch(setMacroVariables(response.macroVariables));
@@ -184,7 +179,6 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
           
           dispatch(analysisCompleted());
           dispatch(setLoadingWithMessage({ isLoading: false }));
-          dispatch(hideProgressBar());
           
           return response;
         }
@@ -194,7 +188,6 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
           dispatch(analysisFailed(errorMsg));
           dispatch(setAnalysisError(errorMsg));
           dispatch(setLoadingWithMessage({ isLoading: false }));
-          dispatch(hideProgressBar());
           dispatch(showError(errorMsg));
           return response;
         }
@@ -207,7 +200,6 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
       dispatch(analysisFailed(timeoutMsg));
       dispatch(setAnalysisError(timeoutMsg));
       dispatch(setLoadingWithMessage({ isLoading: false }));
-      dispatch(hideProgressBar());
       dispatch(showError(timeoutMsg));
       
       return { success: false, message: timeoutMsg };
@@ -216,7 +208,6 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
       dispatch(analysisFailed(errorMessage));
       dispatch(setAnalysisError(errorMessage));
       dispatch(setLoadingWithMessage({ isLoading: false }));
-      dispatch(hideProgressBar());
       dispatch(showError(errorMessage));
       throw error;
     }
@@ -241,14 +232,12 @@ export const submitAnalysisWithProgressThunk = createAsyncThunk(
       dispatch(setSessionId(sessionId));
       dispatch(setUserQuery(query));
       dispatch(setLoadingWithMessage({ isLoading: true, message: 'Starting analysis...' }));
-      dispatch(showProgressBar(0));
       
       // Submit request with progress updates
       const response = await submitAnalysisWithProgress(
         query,
         (_, progress, message) => {
           dispatch(setLoadingWithMessage({ isLoading: true, message }));
-          dispatch(updateProgressBar({ progress, message }));
           dispatch(updateAnalysisProgress({ progress, message }));
         },
         { 
@@ -261,17 +250,19 @@ export const submitAnalysisWithProgressThunk = createAsyncThunk(
       if (!response.success) {
         dispatch(analysisFailed(response.message || 'Analysis failed'));
         dispatch(setLoadingWithMessage({ isLoading: false }));
-        dispatch(hideProgressBar());
         dispatch(showError(response.message || 'Analysis failed'));
         return response;
       }
       
       // Handle the response
       if (response.result) {
-        dispatch(setAnalysisResult(response.result));
-      }
-      if (response.metadata) {
-        dispatch(setAnalysisMetadata(response.metadata));
+        const mapped = mapBackendResultToCausalAnalysis(response.result);
+        if (mapped) {
+          dispatch(setAnalysisResult(mapped));
+        }
+        if (response.result.metadata) {
+          dispatch(setAnalysisMetadata(response.result.metadata));
+        }
       }
       if (response.macroVariables) {
         dispatch(setMacroVariables(response.macroVariables));
@@ -287,7 +278,6 @@ export const submitAnalysisWithProgressThunk = createAsyncThunk(
       
       dispatch(analysisCompleted());
       dispatch(setLoadingWithMessage({ isLoading: false }));
-      dispatch(hideProgressBar());
       
       return response;
     } catch (error) {
@@ -295,7 +285,6 @@ export const submitAnalysisWithProgressThunk = createAsyncThunk(
       dispatch(analysisFailed(errorMessage));
       dispatch(setAnalysisError(errorMessage));
       dispatch(setLoadingWithMessage({ isLoading: false }));
-      dispatch(hideProgressBar());
       dispatch(showError(errorMessage));
       throw error;
     }

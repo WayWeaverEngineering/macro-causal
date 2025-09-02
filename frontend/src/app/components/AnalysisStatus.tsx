@@ -2,8 +2,7 @@ import { useSelector } from 'react-redux';
 import { 
   Box, 
   Paper, 
-  Typography, 
-  LinearProgress,
+  Typography,
   Collapse,
   Stack,
   Chip
@@ -18,7 +17,6 @@ import {
   selectIsExecuting, 
   selectExecutionSteps, 
   selectCurrentStep,
-  selectProgressPercentage,
   selectIsOutOfScope,
   selectOutOfScopeReason
 } from '../../redux/selectors';
@@ -27,7 +25,6 @@ export const AnalysisStatus = () => {
   const isExecuting = useSelector(selectIsExecuting);
   const executionSteps = useSelector(selectExecutionSteps);
   const currentStep = useSelector(selectCurrentStep);
-  const progressPercentage = useSelector(selectProgressPercentage);
   const isOutOfScope = useSelector(selectIsOutOfScope);
   const outOfScopeReason = useSelector(selectOutOfScopeReason);
 
@@ -59,31 +56,6 @@ export const AnalysisStatus = () => {
               <Typography variant="h6" sx={{ color: '#fff' }}>
                 Causal Analysis Progress
               </Typography>
-            </Box>
-
-            {/* Progress Bar */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" sx={{ color: '#ccc' }}>
-                  Progress
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#90caf9', fontWeight: 500 }}>
-                  {progressPercentage}%
-                </Typography>
-              </Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={progressPercentage} 
-                sx={{
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: '#333',
-                  '& .MuiLinearProgress-bar': {
-                    backgroundColor: '#90caf9',
-                    borderRadius: 4,
-                  },
-                }}
-              />
             </Box>
 
             {/* Current Step */}

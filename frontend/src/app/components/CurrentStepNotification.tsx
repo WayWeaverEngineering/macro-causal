@@ -3,19 +3,16 @@ import {
   Snackbar,
   Alert,
   Box,
-  Typography,
-  LinearProgress
+  Typography
 } from '@mui/material';
 import { 
   selectIsExecuting, 
-  selectCurrentStep,
-  selectProgressPercentage 
+  selectCurrentStep
 } from '../../redux/selectors';
 
 export const CurrentStepNotification = () => {
   const isExecuting = useSelector(selectIsExecuting);
   const currentStep = useSelector(selectCurrentStep);
-  const progressPercentage = useSelector(selectProgressPercentage);
 
   if (!isExecuting || !currentStep) {
     return null;
@@ -54,30 +51,6 @@ export const CurrentStepNotification = () => {
           <Typography variant="body2" sx={{ color: '#ccc', mb: 2 }}>
             {currentStep.description}
           </Typography>
-          
-          <Box sx={{ mb: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography variant="caption" sx={{ color: '#90caf9' }}>
-                Progress
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#90caf9', fontWeight: 500 }}>
-                {progressPercentage}%
-              </Typography>
-            </Box>
-            <LinearProgress 
-              variant="determinate" 
-              value={progressPercentage} 
-              sx={{
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: '#2a2a2a',
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: '#90caf9',
-                  borderRadius: 2,
-                },
-              }}
-            />
-          </Box>
         </Box>
       </Alert>
     </Snackbar>

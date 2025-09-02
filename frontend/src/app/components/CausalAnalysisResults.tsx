@@ -80,16 +80,16 @@ export const CausalAnalysisResults = () => {
           <Paper sx={{ p: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
                           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
                 <Box sx={{ flex: 1, textAlign: 'center' }}>
-                  <Typography variant="h4" sx={{ color: getEffectColor(analysis?.causalEffect.effect || 0), fontWeight: 600 }}>
-                    {formatEffect(analysis?.causalEffect.effect || 0)}
+                  <Typography variant="h4" sx={{ color: getEffectColor(analysis?.causalEffect?.effect ?? 0), fontWeight: 600 }}>
+                    {formatEffect(analysis?.causalEffect?.effect ?? 0)}
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#aaa' }}>
                     Causal Effect
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1, textAlign: 'center' }}>
-                  <Typography variant="h4" sx={{ color: getConfidenceColor(analysis?.causalEffect.confidenceInterval?.[0] || 0), fontWeight: 600 }}>
-                    {formatConfidence(analysis?.causalEffect.confidenceInterval?.[0] || 0)}
+                  <Typography variant="h4" sx={{ color: getConfidenceColor(analysis?.causalEffect?.confidenceInterval?.[0] ?? 0), fontWeight: 600 }}>
+                    {formatConfidence(analysis?.causalEffect?.confidenceInterval?.[0] ?? 0)}
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#aaa' }}>
                     Confidence Level
@@ -98,10 +98,10 @@ export const CausalAnalysisResults = () => {
               </Box>
             <Box sx={{ mt: 2, textAlign: 'center' }}>
               <Typography variant="body2" sx={{ color: '#ccc' }}>
-                Confidence Interval: [{formatEffect(analysis?.causalEffect.confidenceInterval?.[0] || 0)}, {formatEffect(analysis?.causalEffect.confidenceInterval?.[1] || 0)}]
+                Confidence Interval: [{formatEffect(analysis?.causalEffect?.confidenceInterval?.[0] ?? 0)}, {formatEffect(analysis?.causalEffect?.confidenceInterval?.[1] ?? 0)}]
               </Typography>
               <Typography variant="body2" sx={{ color: '#ccc' }}>
-                P-value: {(analysis?.causalEffect.pValue || 0).toFixed(4)}
+                P-value: {(analysis?.causalEffect?.pValue ?? 0).toFixed(4)}
               </Typography>
             </Box>
           </Paper>
