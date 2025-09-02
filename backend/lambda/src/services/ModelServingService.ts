@@ -21,35 +21,44 @@ export class ModelServingService {
    * @returns Promise<ModelServingResponse> - The model inference results
    */
   async submitInferenceRequest(modelInputs: any): Promise<ModelServingResponse> {
-    console.log('ModelServingService.submitInferenceRequest - Starting inference request');
-    console.log('ModelServingService.submitInferenceRequest - Inputs:', JSON.stringify(modelInputs, null, 2));
-
     try {
-      // First, get available models to find the hybrid causal model
+      // Get available models and choose a ready hybrid causal model
       const models = await this.getAvailableModels();
-      console.log('ModelServingService.submitInferenceRequest - Available models:', models);
+      const readyModels = models.filter((m: any) => m.status === 'ready');
 
-      // Find the hybrid causal model
-      const hybridModel = models.find((model: any) => 
-        model.model_type === 'hybrid_causal_model' || 
-        model.model_name?.includes('hybrid') || 
-        model.model_name?.includes('causal')
+      // Prefer models whose name hints at hybrid/causal; otherwise take the most recent
+      const preferred = readyModels.filter((m: any) =>
+        (m.model_name || '').toLowerCase().includes('hybrid') ||
+        (m.model_name || '').toLowerCase().includes('causal')
       );
+      const candidates = preferred.length > 0 ? preferred : readyModels;
+      if (!candidates.length) {
+        throw new Error('No ready models found in model serving service');
+      }
+      // Sort by created_at descending if available
+      candidates.sort((a: any, b: any) => {
+        const ta = Date.parse(a.created_at || '');
+        const tb = Date.parse(b.created_at || '');
+        return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
+      });
+      const chosenModel = candidates[0];
 
-      if (!hybridModel) {
-        throw new Error('No hybrid causal model found in model serving service');
+      // Verify model type and retrieve schema
+      const modelInfo = await this.getModelInfo(chosenModel.model_id);
+      if (modelInfo?.type !== 'hybrid_causal_model') {
+        throw new Error(`Chosen model is not hybrid_causal_model: ${modelInfo?.type}`);
       }
 
-      console.log('ModelServingService.submitInferenceRequest - Using model:', hybridModel.model_id);
+      // Prepare inputs aligned to feature_columns and wrap as { instances: [...] }
+      const prepared = this.prepareModelInputs(modelInputs, modelInfo?.feature_columns || []);
 
-      // Submit prediction request
-      const response = await fetch(`${this.baseUrl}/predict/${hybridModel.model_id}`, {
+      const response = await fetch(`${this.baseUrl}/predict/${chosenModel.model_id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           // No Authorization header needed for internal FastAPI service
         },
-        body: JSON.stringify(this.prepareModelInputs(modelInputs))
+        body: JSON.stringify({ instances: [prepared] })
       });
 
       if (!response.ok) {
@@ -58,8 +67,6 @@ export class ModelServingService {
       }
 
       const result = await response.json();
-      console.log('ModelServingService.submitInferenceRequest - Success:', JSON.stringify(result, null, 2));
-
       // FastAPI returns { model_id, prediction: {...} }
       const predictionPayload = result?.prediction ?? result;
 
@@ -102,48 +109,37 @@ export class ModelServingService {
   }
 
   /**
+   * Get detailed info for a model to retrieve type and feature schema
+   */
+  private async getModelInfo(modelId: string): Promise<any | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/models/${modelId}/info`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error('ModelServingService.getModelInfo - Error:', error);
+      return null;
+    }
+  }
+
+  /**
    * Prepare model inputs in the format expected by the model serving service
    * @param modelInputs - The structured inputs from OpenAI
    * @returns any - The prepared inputs for the model
    */
-  private prepareModelInputs(modelInputs: any): any {
-    // Extract the inputs from the OpenAI response
-    const inputs = modelInputs.inputs || modelInputs;
-    
-    // Convert the inputs to the format expected by the model serving service
-    // The model serving service expects feature values, not feature names
-    const preparedInputs: any = {};
-    
-    // For now, we'll use placeholder values based on the input structure
-    // In a real implementation, you would fetch actual data for these features
-    
-    if (inputs.treatment_variables) {
-      inputs.treatment_variables.forEach((variable: string) => {
-        preparedInputs[variable] = this.getPlaceholderValue(variable);
-      });
-    }
-    
-    if (inputs.outcome_variables) {
-      inputs.outcome_variables.forEach((variable: string) => {
-        preparedInputs[variable] = this.getPlaceholderValue(variable);
-      });
-    }
-    
-    if (inputs.confounders) {
-      inputs.confounders.forEach((variable: string) => {
-        preparedInputs[variable] = this.getPlaceholderValue(variable);
-      });
-    }
-    
-    // Add market indicators if available
-    if (inputs.market_indicators) {
-      inputs.market_indicators.forEach((indicator: string) => {
-        preparedInputs[indicator] = this.getPlaceholderValue(indicator);
-      });
-    }
-    
-    console.log('ModelServingService.prepareModelInputs - Prepared inputs:', preparedInputs);
-    return preparedInputs;
+  private prepareModelInputs(modelInputs: any, featureColumns: string[]): any {
+    const inputs = modelInputs.inputs || modelInputs || {};
+    const prepared: any = {};
+    // Default to 0.0 for any missing feature; use provided numeric values when present
+    featureColumns.forEach((col: string) => {
+      const source = (inputs.values && typeof inputs.values[col] !== 'undefined') ? inputs.values[col]
+        : (typeof inputs[col] !== 'undefined' ? inputs[col] : undefined);
+      prepared[col] = this.getNumericValueOrDefault(source, col);
+    });
+    return prepared;
   }
 
   /**
@@ -177,6 +173,14 @@ export class ModelServingService {
     
     // Return mapped value or generate random value if not found
     return featureMap[featureName] || (Math.random() * 2 - 1); // Random value between -1 and 1
+  }
+
+  private getNumericValueOrDefault(value: any, featureName: string): number {
+    if (typeof value === 'number' && isFinite(value)) return value;
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed) && isFinite(parsed)) return parsed;
+    // Fall back to a stable placeholder to avoid NaNs
+    return this.getPlaceholderValue(featureName);
   }
 
   /**
