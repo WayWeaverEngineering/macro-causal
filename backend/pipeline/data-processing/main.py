@@ -8,7 +8,8 @@ import argparse
 import logging
 import sys
 import os
-from datetime import datetime, timedelta
+import io
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 
 import pandas as pd
@@ -45,12 +46,8 @@ def validate_s3_paths(bronze_bucket: str, silver_bucket: str, gold_bucket: str) 
         
         for prefix in expected_prefixes:
             try:
-                response = s3_client.list_objects_v2(
-                    Bucket=bronze_bucket,
-                    Prefix=prefix,
-                    MaxKeys=1
-                )
-                if 'Contents' not in response:
+                resp = s3_client.list_objects_v2(Bucket=bronze_bucket, Prefix=prefix, MaxKeys=1)
+                if resp.get('KeyCount', 0) == 0:
                     missing_prefixes.append(prefix)
             except Exception as e:
                 logger.warning(f"Could not check prefix {prefix}: {e}")
@@ -83,7 +80,7 @@ def ensure_output_folders(silver_bucket: str, gold_bucket: str, execution_id: st
                 s3_client.put_object(
                     Bucket=silver_bucket,
                     Key=f"{folder}.keep",
-                    Body='',
+                    Body=b'',
                     ContentType='text/plain'
                 )
                 logger.info(f"Created silver folder: {folder}")
@@ -101,7 +98,7 @@ def ensure_output_folders(silver_bucket: str, gold_bucket: str, execution_id: st
                 s3_client.put_object(
                     Bucket=gold_bucket,
                     Key=f"{folder}.keep",
-                    Body='',
+                    Body=b'',
                     ContentType='text/plain'
                 )
                 logger.info(f"Created gold folder: {folder}")
@@ -161,12 +158,16 @@ class DataProcessor:
         # Results tracking
         self.results = {
             'execution_id': execution_id,
-            'start_time': datetime.now().isoformat(),
+            'start_time': datetime.now(timezone.utc).isoformat(),
             'overall_status': 'success',
             'bronze_to_silver': {},
             'silver_to_gold': {},
             'errors': []
         }
+    
+    def _now_utc_iso(self) -> str:
+        """Get current UTC time as ISO string."""
+        return datetime.now(timezone.utc).isoformat()
     
     def list_s3_objects(self, bucket: str, prefix: str) -> List[str]:
         """List all objects in S3 bucket with given prefix"""
@@ -185,35 +186,38 @@ class DataProcessor:
             raise
     
     def load_parquet_from_s3(self, bucket: str, key: str) -> pd.DataFrame:
-        """Load Parquet file from S3"""
+        """Load Parquet file from S3 safely via BytesIO."""
         try:
-            response = self.s3_client.get_object(Bucket=bucket, Key=key)
-            df = pd.read_parquet(response['Body'])
+            obj = self.s3_client.get_object(Bucket=bucket, Key=key)
+            with io.BytesIO(obj['Body'].read()) as buf:
+                df = pd.read_parquet(buf)  # relies on pyarrow in EMR
             return df
         except Exception as e:
-            logger.error(f"Error loading Parquet from S3 {bucket}/{key}: {e}")
+            logger.error(f"Error loading Parquet from s3://{bucket}/{key}: {e}")
             raise
     
     def save_parquet_to_s3(self, df: pd.DataFrame, bucket: str, key: str) -> str:
-        """Save DataFrame as Parquet to S3"""
+        """Save DataFrame as Parquet to S3 using BytesIO."""
         try:
-            buffer = df.to_parquet(index=False)
+            buf = io.BytesIO()
+            df.to_parquet(buf, index=False, compression="snappy")  # engine=pyarrow by default in EMR
+            buf.seek(0)
             self.s3_client.put_object(
                 Bucket=bucket,
                 Key=key,
-                Body=buffer,
-                ContentType='application/octet-stream'
+                Body=buf.getvalue(),
+                ContentType='application/x-parquet'
             )
             return key
         except Exception as e:
-            logger.error(f"Error saving Parquet to S3 {bucket}/{key}: {e}")
+            logger.error(f"Error saving Parquet to S3 s3://{bucket}/{key}: {e}")
             raise
     
     def process_fred_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process and clean FRED data"""
         try:
             # Ensure date column is datetime
-            df['date'] = pd.to_datetime(df['date'])
+            df['date'] = pd.to_datetime(df['date'], utc=True)
             
             # Convert value to numeric, handling missing values
             df['value'] = pd.to_numeric(df['value'], errors='coerce')
@@ -225,7 +229,7 @@ class DataProcessor:
             df = df.sort_values('date')
             
             # Add processing metadata
-            df['processed_timestamp'] = datetime.now().isoformat()
+            df['processed_timestamp'] = self._now_utc_iso()
             df['execution_id'] = self.execution_id
             
             return df
@@ -237,7 +241,7 @@ class DataProcessor:
         """Process and clean World Bank data"""
         try:
             # Ensure date column is datetime
-            df['date'] = pd.to_datetime(df['date'])
+            df['date'] = pd.to_datetime(df['date'], utc=True)
             
             # Convert value to numeric, handling missing values
             df['value'] = pd.to_numeric(df['value'], errors='coerce')
@@ -249,7 +253,7 @@ class DataProcessor:
             df = df.sort_values('date')
             
             # Add processing metadata
-            df['processed_timestamp'] = datetime.now().isoformat()
+            df['processed_timestamp'] = self._now_utc_iso()
             df['execution_id'] = self.execution_id
             
             return df
@@ -260,26 +264,29 @@ class DataProcessor:
     def process_yahoo_finance_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process and clean Yahoo Finance data"""
         try:
-            # Ensure date column is datetime
-            df['Date'] = pd.to_datetime(df['Date'])
-            
-            # Convert OHLCV columns to numeric
-            numeric_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+            # Standardize column names
+            rename_map = {'Date': 'date', 'Adj Close': 'Adj_Close', 'AdjClose': 'Adj_Close'}
+            df = df.rename(columns=rename_map)
+
+            df['date'] = pd.to_datetime(df['date'], utc=True)
+
+            numeric_columns = ['Open', 'High', 'Low', 'Close', 'Adj_Close', 'Volume']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
-            
+
+            # Optional: better dtype for volume to keep NA support
+            if 'Volume' in df.columns:
+                df['Volume'] = df['Volume'].astype('Int64')
+
             # Remove rows with missing values in key columns
-            df = df.dropna(subset=['Close', 'Date'])
+            df = df.dropna(subset=['Close', 'date'])
             
             # Sort by date
-            df = df.sort_values('Date')
-            
-            # Rename Date column to date for consistency
-            df = df.rename(columns={'Date': 'date'})
+            df = df.sort_values('date')
             
             # Add processing metadata
-            df['processed_timestamp'] = datetime.now().isoformat()
+            df['processed_timestamp'] = self._now_utc_iso()
             df['execution_id'] = self.execution_id
             
             return df
@@ -437,14 +444,23 @@ class DataProcessor:
             feature_engineer = FeatureEngineer(self.execution_id)
             features_df, feature_names = feature_engineer.create_final_features(fred_df, worldbank_df, yahoo_df)
             
-            # Save features to gold bucket
+            # Save features if non-empty
             gold_key = f"gold/{self.execution_id}/processed_data.parquet"
-            self.save_parquet_to_s3(features_df, self.gold_bucket, gold_key)
+            if not features_df.empty:
+                self.save_parquet_to_s3(features_df, self.gold_bucket, gold_key)
+            else:
+                logger.warning("No features produced; skipping Parquet write.")
             
-            # Update results
+            # Update results safely
             results['final_shape'] = features_df.shape
-            results['feature_count'] = len([col for col in features_df.columns if col not in ['date', 'target', 'execution_id', 'feature_creation_timestamp']])
-            results['date_range'] = f"{features_df['date'].min().strftime('%Y-%m-%d')} to {features_df['date'].max().strftime('%Y-%m-%d')}"
+            results['feature_count'] = len(feature_names)
+            
+            if not features_df.empty and 'date' in features_df.columns and pd.api.types.is_datetime64_any_dtype(features_df['date']):
+                dmin = features_df['date'].min()
+                dmax = features_df['date'].max()
+                results['date_range'] = f"{dmin.strftime('%Y-%m-%d')} to {dmax.strftime('%Y-%m-%d')}"
+            else:
+                results['date_range'] = 'N/A'
             results['records_processed'] = len(features_df)
             
             logger.info("Silver to Gold processing completed successfully")
@@ -470,7 +486,7 @@ class DataProcessor:
             self.results['silver_to_gold'] = silver_to_gold_results
             
             # Record completion time
-            self.results['end_time'] = datetime.now().isoformat()
+            self.results['end_time'] = datetime.now(timezone.utc).isoformat()
             
             # Determine overall status
             if self.results['errors']:
@@ -484,7 +500,7 @@ class DataProcessor:
             logger.error(f"Data Processing Pipeline failed: {e}")
             self.results['overall_status'] = 'failure'
             self.results['errors'].append(f"Pipeline execution error: {e}")
-            self.results['end_time'] = datetime.now().isoformat()
+            self.results['end_time'] = datetime.now(timezone.utc).isoformat()
             return self.results
 
 def main() -> int:
@@ -498,7 +514,7 @@ def main() -> int:
         logger.info('=' * 60)
         logger.info('DATA PROCESSING PIPELINE STARTED')
         logger.info('=' * 60)
-        logger.info(f'Timestamp: {datetime.now().isoformat()}')
+        logger.info(f'Timestamp: {datetime.now(timezone.utc).isoformat()}')
         logger.info(f'Bronze bucket: {args.bronze_bucket}')
         logger.info(f'Silver bucket: {args.silver_bucket}')
         logger.info(f'Gold bucket: {args.gold_bucket}')
