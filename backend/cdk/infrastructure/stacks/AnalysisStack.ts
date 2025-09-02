@@ -5,7 +5,7 @@ import { DefaultIdBuilder } from "../../utils/Naming";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import { Role, ServicePrincipal, ManagedPolicy } from "aws-cdk-lib/aws-iam";
+import { Role, ServicePrincipal, ManagedPolicy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { Table, AttributeType, BillingMode, ProjectionType } from "aws-cdk-lib/aws-dynamodb";
 import { AWS_QUEUE_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, DEFAULT_LAMBDA_NODEJS_RUNTIME, DEFAULT_QUEUE_TIMEOUT_MINS, DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME, LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME, OPEN_SEARCH_INTEGRATION_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
@@ -72,6 +72,15 @@ export class AnalysisStack extends Stack {
     const dynamodbIntegrationLambdaLayer = props.lambdaLayersStack.getLayer(DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME)
     const awsQueueLambdaLayer = props.lambdaLayersStack.getLayer(AWS_QUEUE_LAMBDA_LAYER_NAME)
 
+
+    // IAM policy statement to allow pipeline stages to fetch secrets from Secret Manager
+    const secretAccessStatement = new PolicyStatement({
+      effect: Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [
+        AwsConfig.OPENAI_API_SECRET_ARN
+      ]
+    })
     // Create IAM role for Lambda functions
     const lambdaRole = new Role(this, DefaultIdBuilder.build('analysis-lambda-role'), {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
@@ -81,6 +90,9 @@ export class AnalysisStack extends Stack {
         ManagedPolicy.fromAwsManagedPolicyName('AmazonSQSFullAccess')
       ]
     });
+
+    // Add secret access statement to scheduling lambda role
+    lambdaRole.addToPrincipalPolicy(secretAccessStatement);
 
     // Create AnalysisSchedulingLambda
     const schedulingLambdaId = DefaultIdBuilder.build('analysis-scheduling-lambda');
@@ -121,6 +133,7 @@ export class AnalysisStack extends Stack {
       role: lambdaRole,
       environment: {
         ANALYSIS_EXECUTIONS_TABLE: this.analysisExecutionsTable.tableName,
+        OPENAI_API_SECRET_ID: AwsConfig.OPENAI_API_SECRET_ID
       },
       layers: [
         awsQueueLambdaLayer,
