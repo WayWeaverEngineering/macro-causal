@@ -12,7 +12,6 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { AwsConfig } from "../configs/AwsConfig";
-import { CfnOutput } from 'aws-cdk-lib';
 
 export interface ModelServingStageProps {
   dataLakeStack: DataLakeStack;
@@ -42,6 +41,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
       memoryLimitMiB: 4096, // Higher memory for model loading
       portMappings: [{ containerPort: 8080 }], // HTTP port for inference API
       persistent: true, // Run as persistent service
+      assignPublicIp: true,
       environment: {
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName,
         ARTIFACTS_BUCKET: props.dataLakeStack.artifactsBucket.bucketName,

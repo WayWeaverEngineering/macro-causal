@@ -11,6 +11,7 @@ export interface EcsFargateServiceProps {
   portMappings?: { containerPort: number }[];
   environment?: { [key: string]: string };
   persistent?: boolean; // Flag to control if service runs continuously
+  assignPublicIp?: boolean;
 }
 
 export class EcsFargateServiceConstruct extends Construct {
@@ -53,7 +54,7 @@ export class EcsFargateServiceConstruct extends Construct {
       cluster, 
       taskDefinition: task, 
       desiredCount: props.persistent ? 1 : 0, // Run continuously if persistent, otherwise Step Functions will trigger tasks
-      assignPublicIp: false,
+      assignPublicIp: props.assignPublicIp ?? false,
     });
   }
 }

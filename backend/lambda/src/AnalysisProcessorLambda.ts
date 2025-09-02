@@ -40,11 +40,9 @@ function removeUndefinedValues(obj: any): any {
 const {
   ANALYSIS_EXECUTIONS_TABLE,
   OPENAI_API_SECRET_ID,
-  MODEL_SERVING_URL,
 } = loadEnvVars([
   'ANALYSIS_EXECUTIONS_TABLE',
-  'OPENAI_API_SECRET_ID',
-  'MODEL_SERVING_URL',
+  'OPENAI_API_SECRET_ID'
 ]);
 
 // Initialize AWS services
@@ -280,6 +278,8 @@ async function processMacroCausalAnalysis(
 
     // Initialize services
     const openAIService = new OpenAIService(openAIApiKey);
+
+    const MODEL_SERVING_URL =  "https://macro-ai-analyst-inference.wayweaver.com";
     const modelServingService = new ModelServingService(MODEL_SERVING_URL);
 
     // Step 1: Convert query to model inputs
