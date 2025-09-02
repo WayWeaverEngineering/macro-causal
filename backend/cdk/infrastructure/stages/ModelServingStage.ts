@@ -2,7 +2,7 @@ import { Construct } from "constructs";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { DefaultIdBuilder } from "../../utils/Naming";
 import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
-import { Duration } from 'aws-cdk-lib';
+
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -72,10 +72,10 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     const modelServingTaskId = DefaultIdBuilder.build(`${modelServingStageName}-task`);
     const modelServingTask = new tasks.EcsRunTask(this, modelServingTaskId, {
       stateName: "Deploying model serving service",
-      comment: "Initialize model serving service and load models",
+      comment: "Initialize model serving service and load models - using REQUEST_RESPONSE since service runs persistently",
       cluster: modelServingService.service.cluster,
       taskDefinition: modelServingService.service.taskDefinition,
-      integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+      integrationPattern: sfn.IntegrationPattern.REQUEST_RESPONSE,
       
       // Configure task parameters
       launchTarget: new tasks.EcsFargateLaunchTarget({
@@ -91,9 +91,6 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
           { name: 'EXECUTION_START_TIME', value: sfn.JsonPath.stringAt('$$.Execution.StartTime') }
         ]
       }],
-      
-      // Configure timeout - shorter since we're just initializing
-      taskTimeout: sfn.Timeout.duration(Duration.hours(1)), // 1-hour timeout for initialization
       
       // Result handling
       resultPath: '$.modelServingResult'
