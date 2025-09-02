@@ -100,9 +100,6 @@ def main():
     """Main function to run data collection"""
     try:
         logger.info("Starting data collection pipeline")
-
-        # Exit early for now for testing
-        sys.exit(0)
         
         # Check required environment variables
         if not BRONZE_BUCKET:
