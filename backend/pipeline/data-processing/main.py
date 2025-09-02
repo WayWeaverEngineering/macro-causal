@@ -107,6 +107,10 @@ def ensure_output_folders(silver_bucket: str, gold_bucket: str, execution_id: st
                 logger.info(f"Created gold folder: {folder}")
             except Exception as e:
                 logger.warning(f"Could not create gold folder {folder}: {e}")
+                
+    except Exception as e:
+        logger.error(f"Error in ensure_output_folders: {e}")
+        raise
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
