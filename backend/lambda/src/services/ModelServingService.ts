@@ -34,8 +34,8 @@ export class ModelServingService {
       // Find the hybrid causal model
       const hybridModel = models.find((model: any) => 
         model.model_type === 'hybrid_causal_model' || 
-        model.name?.includes('hybrid') || 
-        model.name?.includes('causal')
+        model.model_name?.includes('hybrid') || 
+        model.model_name?.includes('causal')
       );
 
       if (!hybridModel) {
@@ -49,7 +49,7 @@ export class ModelServingService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` })
+          // No Authorization header needed for internal FastAPI service
         },
         body: JSON.stringify(this.prepareModelInputs(modelInputs))
       });
@@ -62,8 +62,11 @@ export class ModelServingService {
       const result = await response.json();
       console.log('ModelServingService.submitInferenceRequest - Success:', JSON.stringify(result, null, 2));
 
+      // FastAPI returns { model_id, prediction: {...} }
+      const predictionPayload = result?.prediction ?? result;
+
       // Transform the response to match our interface
-      return this.transformResponse(result);
+      return this.transformResponse(predictionPayload);
 
     } catch (error) {
       console.error('ModelServingService.submitInferenceRequest - Error:', error);
@@ -83,7 +86,7 @@ export class ModelServingService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` })
+          // No Authorization header needed for internal FastAPI service
         }
       });
 
@@ -91,7 +94,8 @@ export class ModelServingService {
         throw new Error(`Failed to get models: ${response.status} ${response.statusText}`);
       }
 
-      const models = await response.json();
+      const modelsResponse = await response.json();
+      const models = modelsResponse?.models ?? modelsResponse;
       return Array.isArray(models) ? models : [];
     } catch (error) {
       console.error('ModelServingService.getAvailableModels - Error:', error);
@@ -254,7 +258,7 @@ export class ModelServingService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` })
+          // No Authorization header needed for internal FastAPI service
         }
       });
 

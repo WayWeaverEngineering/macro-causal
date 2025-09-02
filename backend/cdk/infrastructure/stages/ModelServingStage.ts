@@ -59,7 +59,8 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
       actions: [
         'dynamodb:GetItem',
         'dynamodb:Query',
-        'dynamodb:Scan'
+        'dynamodb:Scan',
+        'dynamodb:DescribeTable'
       ],
       resources: [props.modelRegistryTable.tableArn]
     });

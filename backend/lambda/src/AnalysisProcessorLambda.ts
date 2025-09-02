@@ -41,12 +41,10 @@ const {
   ANALYSIS_EXECUTIONS_TABLE,
   OPENAI_API_SECRET_ID,
   MODEL_SERVING_URL,
-  MODEL_SERVING_API_KEY,
 } = loadEnvVars([
   'ANALYSIS_EXECUTIONS_TABLE',
   'OPENAI_API_SECRET_ID',
   'MODEL_SERVING_URL',
-  'MODEL_SERVING_API_KEY',
 ]);
 
 // Initialize AWS services
@@ -282,7 +280,7 @@ async function processMacroCausalAnalysis(
 
     // Initialize services
     const openAIService = new OpenAIService(openAIApiKey);
-    const modelServingService = new ModelServingService(MODEL_SERVING_URL, MODEL_SERVING_API_KEY);
+    const modelServingService = new ModelServingService(MODEL_SERVING_URL);
 
     // Step 1: Convert query to model inputs
     const queryStep: ExecutionStep = {
