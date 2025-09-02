@@ -7,7 +7,8 @@ Serves Hybrid Causal Inference ML models via FastAPI endpoints
 import os
 import json
 import logging
-import pickle
+import joblib
+import uuid
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -16,6 +17,8 @@ import structlog
 import numpy as np
 import pandas as pd
 import torch
+import sklearn
+import econml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -66,6 +69,15 @@ model_cache: Dict[str, Any] = {}
 # Model types supported
 SUPPORTED_MODEL_TYPES = ['hybrid_causal_model']
 
+def _scan_all(**kwargs):
+    """Helper function to scan DynamoDB with pagination"""
+    items, resp = [], dynamodb.scan(**kwargs)
+    items.extend(resp.get("Items", []))
+    while "LastEvaluatedKey" in resp:
+        resp = dynamodb.scan(ExclusiveStartKey=resp["LastEvaluatedKey"], **kwargs)
+        items.extend(resp.get("Items", []))
+    return items
+
 def validate_environment() -> bool:
     """Validate that all required environment variables and S3 paths are accessible"""
     try:
@@ -109,7 +121,7 @@ def ensure_model_folders() -> None:
             s3.put_object(
                 Bucket=ARTIFACTS_BUCKET,
                 Key=f"{models_folder}.keep",
-                Body='',
+                Body=b'',
                 ContentType='text/plain'
             )
             logger.info("Ensured models folder exists", folder=models_folder)
@@ -122,7 +134,7 @@ def ensure_model_folders() -> None:
             s3.put_object(
                 Bucket=GOLD_BUCKET,
                 Key=f"{inference_folder}.keep",
-                Body='',
+                Body=b'',
                 ContentType='text/plain'
             )
             logger.info("Ensured inference results folder exists", folder=inference_folder)
@@ -170,13 +182,13 @@ async def health_check():
 async def list_models():
     """List available models"""
     try:
-        response = dynamodb.scan(
+        response_items = _scan_all(
             TableName=MODEL_REGISTRY_TABLE,
             ProjectionExpression="model_id, model_name, model_version, status, created_at"
         )
         
         models = []
-        for item in response.get('Items', []):
+        for item in response_items:
             models.append({
                 "model_id": item.get('model_id', {}).get('S'),
                 "model_name": item.get('model_name', {}).get('S'),
@@ -209,6 +221,7 @@ async def get_model_info(model_id: str):
             "n_features": len(model_info.get('feature_columns', [])),
             "loaded_at": model_info.get('loaded_at'),
             "training_results": model_info.get('training_results', {}),
+            "versions": model_info.get('versions', {}),
             "status": model_info.get('status')
         }
     
@@ -219,6 +232,34 @@ async def get_model_info(model_id: str):
                     model_id=model_id,
                     error=str(e))
         raise HTTPException(status_code=500, detail="Failed to retrieve model info")
+
+@app.post("/reload/{model_id}")
+async def reload_model(model_id: str, request: Request):
+    """Reload a model from S3 (useful during development)"""
+    try:
+        data = await request.json()
+        model_path = data.get('model_path')
+        
+        if not model_path:
+            raise HTTPException(status_code=400, detail="model_path is required")
+        
+        # Load the model
+        await load_model(model_id, model_path)
+        
+        logger.info("Model reloaded successfully", model_id=model_id, model_path=model_path)
+        return {
+            "status": "reloaded",
+            "model_id": model_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to reload model", 
+                    model_id=model_id,
+                    error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to reload model")
 
 @app.post("/predict/{model_id}")
 async def predict(model_id: str, request: Request):
@@ -238,9 +279,10 @@ async def predict(model_id: str, request: Request):
         prediction = await make_prediction(model_id, data, model_info)
         
         # Log prediction
+        n_instances = len(data.get("instances", [])) if isinstance(data, dict) and "instances" in data else 1
         logger.info("Prediction made", 
                    model_id=model_id,
-                   input_size=len(str(data)),
+                   n_instances=n_instances,
                    execution_mode=EXECUTION_MODE)
         
         return {
@@ -265,13 +307,14 @@ async def initialize_models():
                    table=MODEL_REGISTRY_TABLE)
         
         # Get available models from DynamoDB
-        response = dynamodb.scan(
+        response_items = _scan_all(
             TableName=MODEL_REGISTRY_TABLE,
             FilterExpression="status = :status",
-            ExpressionAttributeValues={":status": {"S": "ready"}}
+            ExpressionAttributeValues={":status": {"S": "ready"}},
+            ProjectionExpression="model_id, model_path"
         )
         
-        for item in response.get('Items', []):
+        for item in response_items:
             model_id = item.get('model_id', {}).get('S')
             model_path = item.get('model_path', {}).get('S')
             
@@ -285,42 +328,37 @@ async def initialize_models():
         logger.error("Failed to initialize models", error=str(e))
         # Don't fail startup - models can be loaded on-demand
 
-def create_regime_classifier(input_size: int):
-    """Create AttentionRegimeClassifier with default architecture"""
-    from torch import nn
-    
-    class AttentionRegimeClassifier(nn.Module):
-        """Self-attention regime classifier for identifying market states"""
-        
-        def __init__(self, input_size: int = 20, hidden_size: int = 32, n_regimes: int = 3, 
-                     attention_heads: int = 4, dropout: float = 0.3):
+def create_regime_classifier(input_size: int, hidden_size: int = 64, n_regimes: int = 3,
+                             dropout: float = 0.3, n_layers: int = 3):
+    """Create RegimeClassifier with MLP architecture matching training"""
+    import torch.nn as nn
+
+    class RegimeClassifier(nn.Module):
+        def __init__(self):
             super().__init__()
-            self.embedding = nn.Linear(input_size, hidden_size)
-            self.attention = nn.MultiheadAttention(hidden_size, num_heads=attention_heads, 
-                                                 dropout=dropout, batch_first=True)
-            self.dropout = nn.Dropout(dropout)
-            self.classifier = nn.Sequential(
-                nn.Linear(hidden_size, hidden_size // 2),
-                nn.ReLU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_size // 2, n_regimes),
-                nn.Softmax(dim=1)
-            )
-        
+            blocks = []
+            in_f = input_size
+            for i in range(n_layers - 1):
+                blocks += [
+                    nn.Linear(in_f, hidden_size),
+                    nn.LayerNorm(hidden_size),
+                    nn.SiLU(),
+                    nn.Dropout(dropout)
+                ]
+                in_f = hidden_size
+            blocks += [nn.Linear(in_f, n_regimes)]   # logits (no softmax)
+            self.net = nn.Sequential(*blocks)
+            for m in self.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.xavier_uniform_(m.weight)
+                    nn.init.zeros_(m.bias)
+
         def forward(self, x):
-            # x shape: (batch_size, seq_len, input_size)
-            if len(x.shape) == 2:
-                x = x.unsqueeze(1)  # Add sequence dimension
-            
-            embedded = self.embedding(x)  # (batch_size, seq_len, hidden_size)
-            attended, _ = self.attention(embedded, embedded, embedded)
-            attended = self.dropout(attended)
-            
-            # Global average pooling over sequence dimension
-            pooled = attended.mean(dim=1)  # (batch_size, hidden_size)
-            return self.classifier(pooled)
-    
-    return AttentionRegimeClassifier(input_size=input_size)
+            if x.ndim == 3:
+                x = x.squeeze(1)
+            return self.net(x)
+
+    return RegimeClassifier()
 
 def create_uncertainty_estimator(input_size: int):
     """Create UncertaintyEstimator with default architecture"""
@@ -355,14 +393,14 @@ async def load_model(model_id: str, model_path: str):
         # Download model from S3 if needed
         if model_path.startswith('s3://'):
             bucket, key = model_path.replace('s3://', '').split('/', 1)
-            local_path = f"/tmp/{model_id}.pkl"
+            local_path = f"/tmp/{model_id}-{uuid.uuid4().hex}.pkl"
             
             s3.download_file(bucket, key, local_path)
             model_path = local_path
         
         # Load the pickled model artifacts
         with open(model_path, 'rb') as f:
-            model_artifacts = pickle.load(f)
+            model_artifacts = joblib.load(f)
         
         # Extract components
         causal_model = model_artifacts['model_state']['causal_model']
@@ -377,9 +415,16 @@ async def load_model(model_id: str, model_path: str):
         uncertainty_estimator = None
         
         if regime_classifier_state:
-            # Reconstruct regime classifier
+            # Reconstruct regime classifier with training hyperparams
             input_size = len(feature_columns)
-            regime_classifier = create_regime_classifier(input_size)
+            reg_cfg = training_results.get('pytorch_spec', {}).get('regime_config', {})
+            regime_classifier = create_regime_classifier(
+                input_size=input_size,
+                hidden_size=reg_cfg.get('hidden_size', 64),
+                n_regimes=reg_cfg.get('n_regimes', 3),
+                dropout=reg_cfg.get('dropout', 0.3),
+                n_layers=reg_cfg.get('n_layers', 3),
+            )
             regime_classifier.load_state_dict(regime_classifier_state)
             regime_classifier.eval()
         
@@ -390,6 +435,18 @@ async def load_model(model_id: str, model_path: str):
             uncertainty_estimator.load_state_dict(uncertainty_estimator_state)
             uncertainty_estimator.eval()
         
+        # Check for version mismatches
+        vers = model_artifacts.get("versions", {})
+        mismatch = {k: (vers.get(k), cur) for k, cur in {
+            "sklearn": sklearn.__version__,
+            "econml": econml.__version__,
+            "torch": torch.__version__,
+            "numpy": np.__version__,
+            "pandas": pd.__version__
+        }.items() if vers.get(k) and vers.get(k) != cur}
+        if mismatch:
+            logger.warning("Library version mismatch between train and serve", mismatch=mismatch)
+        
         # Store in cache
         model_cache[model_id] = {
             "type": "hybrid_causal_model",
@@ -399,6 +456,7 @@ async def load_model(model_id: str, model_path: str):
             "scaler": scaler,
             "feature_columns": feature_columns,
             "training_results": training_results,
+            "versions": model_artifacts.get("versions", {}),
             "loaded_at": datetime.utcnow().isoformat(),
             "status": "loaded"
         }
@@ -406,6 +464,10 @@ async def load_model(model_id: str, model_path: str):
         logger.info("Hybrid causal model loaded successfully", 
                    model_id=model_id,
                    n_features=len(feature_columns))
+        
+        # Log model schema for client reference
+        logger.info("Model schema", model_id=model_id, n_features=len(feature_columns),
+                    first_features=feature_columns[:10])
     
     except Exception as e:
         logger.error("Failed to load hybrid causal model", 
@@ -442,6 +504,14 @@ async def make_hybrid_causal_prediction(data: Dict[str, Any], model_info: Dict[s
         # Prepare input data
         input_data = prepare_input_data(data, feature_columns)
         
+        # Guard against feature drift (order + count)
+        if input_data.shape[1] != len(feature_columns):
+            raise ValueError(f"Expected {len(feature_columns)} features, got {input_data.shape[1]}")
+        
+        # Validate scaler compatibility
+        if hasattr(scaler, "n_features_in_") and scaler.n_features_in_ != len(feature_columns):
+            raise ValueError(f"Scaler expects {scaler.n_features_in_} features, got {len(feature_columns)}")
+        
         # Scale features
         X_scaled = scaler.transform(input_data)
         
@@ -454,8 +524,9 @@ async def make_hybrid_causal_prediction(data: Dict[str, Any], model_info: Dict[s
         if regime_classifier:
             regime_classifier.eval()
             with torch.no_grad():
-                X_tensor = torch.FloatTensor(X_scaled)
-                regime_probs = regime_classifier(X_tensor).numpy()
+                X_tensor = torch.from_numpy(X_scaled).float()  # same result, slightly quicker
+                regime_logits = regime_classifier(X_tensor)
+                regime_probs = torch.softmax(regime_logits, dim=1).cpu().numpy()
                 dominant_regime = np.argmax(regime_probs, axis=1)
         
         # Get uncertainty estimates from PyTorch estimator
@@ -463,8 +534,8 @@ async def make_hybrid_causal_prediction(data: Dict[str, Any], model_info: Dict[s
         if uncertainty_estimator:
             uncertainty_estimator.eval()
             with torch.no_grad():
-                X_tensor = torch.FloatTensor(X_scaled)
-                uncertainty = uncertainty_estimator(X_tensor).numpy().flatten()
+                X_tensor = torch.from_numpy(X_scaled).float()  # same result, slightly quicker
+                uncertainty = uncertainty_estimator(X_tensor).squeeze(-1).cpu().numpy()
         
         # Prepare response
         prediction_result = {
@@ -487,22 +558,29 @@ async def make_hybrid_causal_prediction(data: Dict[str, Any], model_info: Dict[s
         logger.error("Hybrid causal prediction failed", error=str(e))
         raise
 
+def _coerce(v):
+    """Coerce input values to float, treating None/empty as missing"""
+    # treat None/"" as missing
+    if v is None or (isinstance(v, str) and v.strip() == ""):
+        return 0.0
+    try:
+        return float(v)
+    except Exception:
+        return 0.0
+
 def prepare_input_data(data: Dict[str, Any], feature_columns: List[str]) -> np.ndarray:
     """Prepare input data for model inference"""
     try:
-        # Extract features from input data
-        features = []
-        for col in feature_columns:
-            if col in data:
-                features.append(data[col])
-            else:
-                # Use default value for missing features
-                features.append(0.0)
+        # Accept either a dict (single row), {"instances": [dict, dict, ...]}, or raw list
+        if isinstance(data, dict) and "instances" in data:
+            rows = data["instances"]
+        elif isinstance(data, list):
+            rows = data
+        else:
+            rows = [data]
         
-        # Convert to numpy array
-        input_array = np.array(features).reshape(1, -1)
-        
-        return input_array
+        mat = [[_coerce(row.get(col, 0.0)) for col in feature_columns] for row in rows]
+        return np.asarray(mat, dtype=np.float32)
     
     except Exception as e:
         logger.error("Failed to prepare input data", error=str(e))
@@ -511,7 +589,7 @@ def prepare_input_data(data: Dict[str, Any], feature_columns: List[str]) -> np.n
 if __name__ == "__main__":
     # Run the FastAPI application
     uvicorn.run(
-        "main:app",
+        app,
         host="0.0.0.0",
         port=8080,
         reload=False,
