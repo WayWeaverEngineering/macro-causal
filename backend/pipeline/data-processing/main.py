@@ -200,7 +200,7 @@ class DataProcessor:
         """Save DataFrame as Parquet to S3 using BytesIO."""
         try:
             buf = io.BytesIO()
-            df.to_parquet(buf, index=False, compression="snappy")  # engine=pyarrow by default in EMR
+            df.to_parquet(buf, index=False, compression="snappy", engine="pyarrow")
             buf.seek(0)
             self.s3_client.put_object(
                 Bucket=bucket,
@@ -264,20 +264,57 @@ class DataProcessor:
     def process_yahoo_finance_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process and clean Yahoo Finance data"""
         try:
+            # Check if required columns exist
+            required_columns = ['Close']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(f"Missing required columns: {missing_columns}")
+            
+            # Pick/normalize a date column with more options including epoch timestamps
+            date_column = None
+            possible_date_columns = ['Date', 'date', 'DATE', 'Date_Time', 'datetime', 'asOfDate', 'asOfDateTime', 'timestamp']
+            for col in possible_date_columns:
+                if col in df.columns:
+                    date_column = col
+                    break
+            
+            if date_column is None:
+                raise ValueError("No date column found. Available columns: " + str(list(df.columns)))
+            
             # Standardize column names
-            rename_map = {'Date': 'date', 'Adj Close': 'Adj_Close', 'AdjClose': 'Adj_Close'}
+            rename_map = {date_column: 'date', 'Adj Close': 'Adj_Close', 'AdjClose': 'Adj_Close'}
             df = df.rename(columns=rename_map)
 
-            df['date'] = pd.to_datetime(df['date'], utc=True)
+            # Ensure a symbol column exists
+            symbol_col = None
+            for c in ['symbol', 'Symbol', 'ticker', 'Ticker']:
+                if c in df.columns:
+                    symbol_col = c
+                    break
+            if symbol_col is None:
+                raise ValueError("No symbol/ticker column found in Yahoo Finance file")
+            # normalize to 'symbol' as string
+            df['symbol'] = df[symbol_col].astype(str)
 
+            # Handle epoch timestamps (ints) if present
+            if np.issubdtype(df['date'].dtype, np.number):
+                df['date'] = pd.to_datetime(df['date'], unit='s', utc=True, errors='coerce')
+            else:
+                df['date'] = pd.to_datetime(df['date'], utc=True, errors='coerce')
+            
+            # Check for invalid dates
+            if df['date'].isna().all():
+                raise ValueError("All date values are invalid after conversion")
+
+            # Convert numeric columns safely
             numeric_columns = ['Open', 'High', 'Low', 'Close', 'Adj_Close', 'Volume']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Optional: better dtype for volume to keep NA support
+            # Better dtype for volume to keep NA support
             if 'Volume' in df.columns:
-                df['Volume'] = df['Volume'].astype('Int64')
+                df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce').astype('Int64')
 
             # Remove rows with missing values in key columns
             df = df.dropna(subset=['Close', 'date'])
@@ -361,21 +398,27 @@ class DataProcessor:
                 logger.warning("No Yahoo Finance data files found in bronze bucket")
             else:
                 for file_key in yahoo_files:
-                    if file_key.endswith('.parquet'):
-                        try:
-                            df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
-                            processed_df = self.process_yahoo_finance_data(df)
-                            
-                            # Save to silver bucket
-                            silver_key = f"silver/{self.execution_id}/yahoo_finance/{file_key.split('/')[-1]}"
-                            self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
-                            
-                            results['yahoo_finance']['records_processed'] += len(processed_df)
-                            results['yahoo_finance']['files_processed'] += 1
-                            
-                        except Exception as e:
-                            logger.warning(f"Failed to process Yahoo Finance file {file_key}: {e}")
-                            self.results['errors'].append(f"Yahoo Finance processing error: {e}")
+                    if not file_key.endswith('.parquet'):
+                        continue
+                    # Skip non-price schemas like "info"
+                    if "/info/" in file_key.lower():
+                        logger.warning(f"Skipping non-price Yahoo file: {file_key}")
+                        continue
+                    try:
+                        df = self.load_parquet_from_s3(self.bronze_bucket, file_key)
+                        processed_df = self.process_yahoo_finance_data(df)
+                        
+                        # Save to silver bucket
+                        silver_key = f"silver/{self.execution_id}/yahoo_finance/{file_key.split('/')[-1]}"
+                        self.save_parquet_to_s3(processed_df, self.silver_bucket, silver_key)
+                        
+                        results['yahoo_finance']['records_processed'] += len(processed_df)
+                        results['yahoo_finance']['files_processed'] += 1
+                        
+                    except Exception as e:
+                        cols = list(df.columns) if 'df' in locals() else None
+                        logger.warning(f"Failed to process Yahoo Finance file {file_key}: {e}; columns={cols}")
+                        self.results['errors'].append(f"Yahoo Finance processing error: {e}")
             
             # Check if any data was processed
             total_files = sum(r['files_processed'] for r in results.values())

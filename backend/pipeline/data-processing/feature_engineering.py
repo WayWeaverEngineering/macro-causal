@@ -21,6 +21,10 @@ class FeatureEngineer:
     def create_economic_features(self, fred_df: pd.DataFrame) -> pd.DataFrame:
         """Create economic features from FRED data"""
         try:
+            if fred_df.empty or 'date' not in fred_df.columns:
+                logger.info("No FRED data available")
+                return pd.DataFrame(), []
+                
             logger.info("Creating economic features from FRED data...")
             
             # Pivot FRED data to wide format
@@ -31,10 +35,13 @@ class FeatureEngineer:
                 aggfunc='first'
             )
             
-            # Resample to daily frequency and forward fill
-            fred_pivot = fred_pivot.resample('D').ffill()
+            # Ensure index is datetime before resampling
+            if not isinstance(fred_pivot.index, pd.DatetimeIndex):
+                fred_pivot.index = pd.to_datetime(fred_pivot.index, utc=True, errors='coerce')
+            fred_pivot = fred_pivot.sort_index().resample('D').ffill()
             
-            # Create lagged features for each economic indicator
+            # Collect all new features in a dictionary to avoid DataFrame fragmentation
+            new_features = {}
             economic_features = []
             
             for series_id in fred_pivot.columns:
@@ -45,7 +52,7 @@ class FeatureEngineer:
                     for lag in [1, 7, 30, 90]:
                         if len(series_data) > lag:
                             lagged_col = f"fred_{series_id}_lag_{lag}d"
-                            fred_pivot[lagged_col] = series_data.shift(lag)
+                            new_features[lagged_col] = series_data.shift(lag)
                             economic_features.append(lagged_col)
                     
                     # Rolling statistics
@@ -53,19 +60,19 @@ class FeatureEngineer:
                         if len(series_data) > window:
                             # Rolling mean
                             mean_col = f"fred_{series_id}_rolling_mean_{window}d"
-                            fred_pivot[mean_col] = series_data.rolling(window).mean()
+                            new_features[mean_col] = series_data.rolling(window).mean()
                             economic_features.append(mean_col)
                             
                             # Rolling standard deviation
                             std_col = f"fred_{series_id}_rolling_std_{window}d"
-                            fred_pivot[std_col] = series_data.rolling(window).std()
+                            new_features[std_col] = series_data.rolling(window).std()
                             economic_features.append(std_col)
                             
                             # Rolling min/max
                             min_col = f"fred_{series_id}_rolling_min_{window}d"
                             max_col = f"fred_{series_id}_rolling_max_{window}d"
-                            fred_pivot[min_col] = series_data.rolling(window).min()
-                            fred_pivot[max_col] = series_data.rolling(window).max()
+                            new_features[min_col] = series_data.rolling(window).min()
+                            new_features[max_col] = series_data.rolling(window).max()
                             economic_features.extend([min_col, max_col])
                     
                     # Rate of change features
@@ -73,17 +80,22 @@ class FeatureEngineer:
                         if len(series_data) > period:
                             # Percentage change
                             pct_col = f"fred_{series_id}_pct_change_{period}d"
-                            fred_pivot[pct_col] = series_data.pct_change(period)
+                            new_features[pct_col] = series_data.pct_change(period)
                             economic_features.append(pct_col)
                             
                             # Log returns
                             log_ret_col = f"fred_{series_id}_log_return_{period}d"
-                            fred_pivot[log_ret_col] = np.log(series_data / series_data.shift(period))
+                            new_features[log_ret_col] = np.log(series_data / series_data.shift(period))
                             economic_features.append(log_ret_col)
             
             # Create interaction features between related indicators
             interaction_features = self._create_economic_interactions(fred_pivot)
             economic_features.extend(interaction_features)
+            
+            # Add all new features at once using concat to avoid fragmentation
+            if new_features:
+                new_features_df = pd.DataFrame(new_features, index=fred_pivot.index)
+                fred_pivot = pd.concat([fred_pivot, new_features_df], axis=1)
             
             logger.info(f"Created {len(economic_features)} economic features")
             return fred_pivot, economic_features
@@ -135,6 +147,10 @@ class FeatureEngineer:
     def create_financial_features(self, yahoo_df: pd.DataFrame) -> pd.DataFrame:
         """Create financial market features from Yahoo Finance data"""
         try:
+            if yahoo_df.empty or 'date' not in yahoo_df.columns:
+                logger.info("No Yahoo Finance data available")
+                return pd.DataFrame(), []
+                
             logger.info("Creating financial market features from Yahoo Finance data...")
             
             # Pivot Yahoo Finance data to wide format
@@ -145,10 +161,13 @@ class FeatureEngineer:
                 aggfunc='first'
             )
             
-            # Resample to daily frequency and forward fill
-            yahoo_pivot = yahoo_pivot.resample('D').ffill()
+            # Ensure index is datetime before resampling
+            if not isinstance(yahoo_pivot.index, pd.DatetimeIndex):
+                yahoo_pivot.index = pd.to_datetime(yahoo_pivot.index, utc=True, errors='coerce')
+            yahoo_pivot = yahoo_pivot.sort_index().resample('D').ffill()
             
-            financial_features = []
+            # Collect all new features in a dictionary to avoid DataFrame fragmentation
+            financial_features, feat_dict = [], {}
             
             for symbol in yahoo_pivot.columns:
                 if symbol in yahoo_pivot.columns:
@@ -157,47 +176,39 @@ class FeatureEngineer:
                     # Returns features
                     for period in [1, 7, 30]:
                         if len(symbol_data) > period:
-                            # Simple returns
                             ret_col = f"yahoo_{symbol}_return_{period}d"
-                            yahoo_pivot[ret_col] = symbol_data.pct_change(period)
-                            financial_features.append(ret_col)
-                            
-                            # Log returns
                             log_ret_col = f"yahoo_{symbol}_log_return_{period}d"
-                            yahoo_pivot[log_ret_col] = np.log(symbol_data / symbol_data.shift(period))
-                            financial_features.append(log_ret_col)
+                            feat_dict[ret_col] = symbol_data.pct_change(period)
+                            feat_dict[log_ret_col] = np.log(symbol_data / symbol_data.shift(period))
+                            financial_features += [ret_col, log_ret_col]
                     
                     # Volatility features
                     for window in [7, 30, 90]:
                         if len(symbol_data) > window:
-                            # Rolling volatility
                             vol_col = f"yahoo_{symbol}_volatility_{window}d"
-                            yahoo_pivot[vol_col] = symbol_data.pct_change().rolling(window).std()
-                            financial_features.append(vol_col)
-                            
-                            # Realized volatility
                             realized_vol_col = f"yahoo_{symbol}_realized_vol_{window}d"
-                            yahoo_pivot[realized_vol_col] = np.sqrt(
-                                (symbol_data.pct_change() ** 2).rolling(window).sum()
-                            )
-                            financial_features.append(realized_vol_col)
+                            r = symbol_data.pct_change()
+                            feat_dict[vol_col] = r.rolling(window).std()
+                            feat_dict[realized_vol_col] = np.sqrt((r ** 2).rolling(window).sum())
+                            financial_features += [vol_col, realized_vol_col]
                     
                     # Technical indicators
                     for window in [7, 14, 30]:
                         if len(symbol_data) > window:
-                            # Moving averages
                             ma_col = f"yahoo_{symbol}_ma_{window}d"
-                            yahoo_pivot[ma_col] = symbol_data.rolling(window).mean()
-                            financial_features.append(ma_col)
-                            
-                            # Price relative to moving average
                             ma_ratio_col = f"yahoo_{symbol}_ma_ratio_{window}d"
-                            yahoo_pivot[ma_ratio_col] = symbol_data / symbol_data.rolling(window).mean()
-                            financial_features.append(ma_ratio_col)
+                            roll = symbol_data.rolling(window)
+                            feat_dict[ma_col] = roll.mean()
+                            feat_dict[ma_ratio_col] = symbol_data / roll.mean()
+                            financial_features += [ma_col, ma_ratio_col]
             
             # Create market-wide features
             market_features = self._create_market_features(yahoo_pivot)
             financial_features.extend(market_features)
+            
+            # One-shot add to avoid fragmentation
+            if feat_dict:
+                yahoo_pivot = pd.concat([yahoo_pivot, pd.DataFrame(feat_dict, index=yahoo_pivot.index)], axis=1).copy()
             
             logger.info(f"Created {len(financial_features)} financial features")
             return yahoo_pivot, financial_features
@@ -224,10 +235,13 @@ class FeatureEngineer:
                 
                 # Market correlation
                 if len(available_indices) > 1:
-                    market_corr = market_returns.rolling(30).corr()
-                    # Average correlation between indices
-                    yahoo_pivot['market_correlation_30d'] = market_corr.groupby(level=0).mean().mean(axis=1)
-                    market_features.append('market_correlation_30d')
+                    # Ensure we have enough data for rolling correlation
+                    min_data = market_returns.notna().sum().min()
+                    if min_data >= 2:
+                        market_corr = market_returns.rolling(30).corr()
+                        # Average correlation between indices
+                        yahoo_pivot['market_correlation_30d'] = market_corr.groupby(level=0).mean().mean(axis=1)
+                        market_features.append('market_correlation_30d')
             
             # VIX-based features (if available)
             if '^VIX' in yahoo_pivot.columns:
@@ -274,7 +288,9 @@ class FeatureEngineer:
             )
             
             # Resample to daily and forward fill (World Bank is annual, so this creates daily values)
-            worldbank_pivot = worldbank_pivot.resample('D').ffill()
+            if not isinstance(worldbank_pivot.index, pd.DatetimeIndex):
+                worldbank_pivot.index = pd.to_datetime(worldbank_pivot.index, utc=True, errors='coerce')
+            worldbank_pivot = worldbank_pivot.sort_index().resample('D').ffill()
             
             worldbank_features = []
             
@@ -304,6 +320,16 @@ class FeatureEngineer:
             cross_country_features = self._create_cross_country_features(worldbank_pivot)
             worldbank_features.extend(cross_country_features)
             
+            # Flatten leftover MultiIndex columns to strings to avoid tuple columns downstream
+            if isinstance(worldbank_pivot.columns, pd.MultiIndex):
+                flat_cols = []
+                for col in worldbank_pivot.columns:
+                    if isinstance(col, tuple):
+                        flat_cols.append(f"wb_{col[0]}_{col[1]}")
+                    else:
+                        flat_cols.append(str(col))
+                worldbank_pivot.columns = flat_cols
+            
             logger.info(f"Created {len(worldbank_features)} World Bank features")
             return worldbank_pivot, worldbank_features
             
@@ -316,31 +342,32 @@ class FeatureEngineer:
         cross_country_features = []
         
         try:
-            # Get unique countries and indicators
             columns = worldbank_pivot.columns
-            countries = list(set([col[0] for col in columns]))
-            indicators = list(set([col[1] for col in columns]))
             
-            # Create relative features (relative to US for major indicators)
+            # Only derive countries/indicators from tuple (multiindex-origin) columns
+            tuple_cols = [col for col in columns if isinstance(col, tuple) and len(col) == 2]
+            if not tuple_cols:
+                logger.info("No tuple columns found in World Bank pivot; skipping cross-country features.")
+                return cross_country_features
+            
+            countries = list({col[0] for col in tuple_cols})
+            indicators = list({col[1] for col in tuple_cols})
+            
             if 'US' in countries:
                 for indicator in indicators:
                     us_col = ('US', indicator)
                     if us_col in columns:
                         us_data = worldbank_pivot[us_col]
-                        
                         for country in countries:
-                            if country != 'US':
-                                country_col = (country, indicator)
-                                if country_col in columns:
-                                    # Relative to US
-                                    relative_col = f"wb_{country}_{indicator}_relative_us"
-                                    worldbank_pivot[relative_col] = worldbank_pivot[country_col] / us_data
-                                    cross_country_features.append(relative_col)
-                                    
-                                    # Difference from US
-                                    diff_col = f"wb_{country}_{indicator}_diff_us"
-                                    worldbank_pivot[diff_col] = worldbank_pivot[country_col] - us_data
-                                    cross_country_features.append(diff_col)
+                            if country == 'US':
+                                continue
+                            country_col = (country, indicator)
+                            if country_col in columns:
+                                relative_col = f"wb_{country}_{indicator}_relative_us"
+                                diff_col = f"wb_{country}_{indicator}_diff_us"
+                                worldbank_pivot[relative_col] = worldbank_pivot[country_col] / us_data
+                                worldbank_pivot[diff_col] = worldbank_pivot[country_col] - us_data
+                                cross_country_features.extend([relative_col, diff_col])
             
             logger.info(f"Created {len(cross_country_features)} cross-country features")
             
@@ -390,13 +417,15 @@ class FeatureEngineer:
             # Market volatility regime
             if 'market_volatility_30d' in combined_df.columns:
                 market_vol = combined_df['market_volatility_30d']
-                vol_quantiles = market_vol.quantile([0.33, 0.67])
-                combined_df['volatility_regime'] = pd.cut(
-                    market_vol,
-                    bins=[-np.inf, vol_quantiles.iloc[0], vol_quantiles.iloc[1], np.inf],
-                    labels=['low_vol', 'medium_vol', 'high_vol']
-                )
-                regime_features.append('volatility_regime')
+                if market_vol.notna().sum() >= 3:
+                    vol_quantiles = market_vol.quantile([0.33, 0.67])
+                    if np.isfinite(vol_quantiles.iloc[0]) and np.isfinite(vol_quantiles.iloc[1]):
+                        combined_df['volatility_regime'] = pd.cut(
+                            market_vol,
+                            bins=[-np.inf, vol_quantiles.iloc[0], vol_quantiles.iloc[1], np.inf],
+                            labels=['low_vol', 'medium_vol', 'high_vol']
+                        )
+                        regime_features.append('volatility_regime')
             
             # Create regime interaction features
             regime_interactions = self._create_regime_interactions(combined_df)
@@ -414,7 +443,7 @@ class FeatureEngineer:
         regime_interactions = []
         
         try:
-            regime_columns = [col for col in df.columns if col.endswith('_regime')]
+            regime_columns = [col for col in df.columns if isinstance(col, str) and col.endswith('_regime')]
             
             # Create pairwise regime interactions
             for i, regime1 in enumerate(regime_columns):
@@ -507,8 +536,8 @@ class FeatureEngineer:
                 worldbank_features_df
             ], axis=1)
             
-            # Remove duplicate columns
-            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
+            # Remove duplicate columns and de-fragment in one shot
+            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()].copy()
             
             # Step 5: Create regime features
             combined_df, regime_feature_names = self.create_regime_features(combined_df)
@@ -518,7 +547,8 @@ class FeatureEngineer:
             
             # Step 7: Create target variable (GDP growth)
             if 'fred_GDP_lag_30d' in combined_df.columns:
-                combined_df['target'] = combined_df['fred_GDP_lag_30d'].pct_change(90)
+                tgt = combined_df['fred_GDP_lag_30d'].pct_change(90)
+                combined_df['target'] = tgt.replace([np.inf, -np.inf], np.nan)
             
             # Step 8: Clean up the dataset
             combined_df = self._clean_final_dataset(combined_df)
@@ -549,9 +579,20 @@ class FeatureEngineer:
             if 'target' in df.columns:
                 df = df.dropna(subset=['target'])
             
-            # Fill missing values in features with 0
-            feature_columns = [col for col in df.columns if col not in ['date', 'target', 'execution_id']]
-            df[feature_columns] = df[feature_columns].fillna(0)
+            # Fill missing values in features with 0, handling categorical columns properly
+            feature_columns = [col for col in df.columns if col not in ['date', 'target', 'execution_id', 'feature_creation_timestamp']]
+            
+            for col in feature_columns:
+                if col not in df.columns:
+                    continue
+                if isinstance(df[col].dtype, pd.CategoricalDtype):
+                    # ensure a safe string category
+                    fill_value = 'unknown'
+                    if fill_value not in df[col].cat.categories:
+                        df[col] = df[col].cat.add_categories([fill_value])
+                    df[col] = df[col].fillna(fill_value)
+                else:
+                    df[col] = df[col].fillna(0)
             
             # Remove infinite values
             df = df.replace([np.inf, -np.inf], 0)
