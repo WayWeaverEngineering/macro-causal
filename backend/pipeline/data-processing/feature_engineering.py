@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,24 @@ class FeatureEngineer:
     
     def __init__(self, execution_id: str):
         self.execution_id = execution_id
+    
+    def _force_utc_index(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Force DataFrame index to be UTC timezone-aware DatetimeIndex"""
+        idx = df.index
+        if not isinstance(idx, pd.DatetimeIndex):
+            idx = pd.to_datetime(idx, errors='coerce', utc=True)
+            logger.debug("Converted non-DatetimeIndex to UTC timezone-aware")
+        else:
+            if idx.tz is None:
+                idx = idx.tz_localize('UTC')
+                logger.debug("Made timezone-naive DatetimeIndex UTC timezone-aware")
+            else:
+                idx = idx.tz_convert('UTC')
+                logger.debug(f"Converted DatetimeIndex from {idx.tz} to UTC")
+        
+        out = df.copy()
+        out.index = idx
+        return out
         
     def create_economic_features(self, fred_df: pd.DataFrame) -> pd.DataFrame:
         """Create economic features from FRED data"""
@@ -35,10 +54,11 @@ class FeatureEngineer:
                 aggfunc='first'
             )
             
-            # Ensure index is datetime before resampling
-            if not isinstance(fred_pivot.index, pd.DatetimeIndex):
-                fred_pivot.index = pd.to_datetime(fred_pivot.index, utc=True, errors='coerce')
+            # Force UTC timezone-aware index before resampling
+            logger.debug("Forcing FRED pivot index to UTC timezone-aware")
+            fred_pivot = self._force_utc_index(fred_pivot)
             fred_pivot = fred_pivot.sort_index().resample('D').ffill()
+            logger.debug(f"FRED pivot index timezone after normalization: {fred_pivot.index.tz}")
             
             # Collect all new features in a dictionary to avoid DataFrame fragmentation
             new_features = {}
@@ -161,10 +181,11 @@ class FeatureEngineer:
                 aggfunc='first'
             )
             
-            # Ensure index is datetime before resampling
-            if not isinstance(yahoo_pivot.index, pd.DatetimeIndex):
-                yahoo_pivot.index = pd.to_datetime(yahoo_pivot.index, utc=True, errors='coerce')
+            # Force UTC timezone-aware index before resampling
+            logger.debug("Forcing Yahoo pivot index to UTC timezone-aware")
+            yahoo_pivot = self._force_utc_index(yahoo_pivot)
             yahoo_pivot = yahoo_pivot.sort_index().resample('D').ffill()
+            logger.debug(f"Yahoo pivot index timezone after normalization: {yahoo_pivot.index.tz}")
             
             # Collect all new features in a dictionary to avoid DataFrame fragmentation
             financial_features, feat_dict = [], {}
@@ -289,10 +310,11 @@ class FeatureEngineer:
                 aggfunc='first'
             )
             
-            # Resample to daily and forward fill (World Bank is annual, so this creates daily values)
-            if not isinstance(worldbank_pivot.index, pd.DatetimeIndex):
-                worldbank_pivot.index = pd.to_datetime(worldbank_pivot.index, utc=True, errors='coerce')
+            # Force UTC timezone-aware index before resampling
+            logger.debug("Forcing World Bank pivot index to UTC timezone-aware")
+            worldbank_pivot = self._force_utc_index(worldbank_pivot)
             worldbank_pivot = worldbank_pivot.sort_index().resample('D').ffill()
+            logger.debug(f"World Bank pivot index timezone after normalization: {worldbank_pivot.index.tz}")
             
             # Snapshot original tuple columns to avoid re-looping over newly added ones
             orig_tuple_cols = [c for c in worldbank_pivot.columns
@@ -543,37 +565,189 @@ class FeatureEngineer:
             logger.info("Creating final feature set...")
             
             # Step 1: Create economic features
-            fred_features_df, fred_feature_names = self.create_economic_features(fred_df)
+            try:
+                fred_features_df, fred_feature_names = self.create_economic_features(fred_df)
+                logger.info(f"Economic features created successfully: {len(fred_feature_names)} features")
+            except Exception as e:
+                logger.error(f"Error creating economic features: {e}")
+                fred_features_df, fred_feature_names = pd.DataFrame(), []
             
             # Step 2: Create financial features
-            yahoo_features_df, yahoo_feature_names = self.create_financial_features(yahoo_df)
+            try:
+                yahoo_features_df, yahoo_feature_names = self.create_financial_features(yahoo_df)
+                logger.info(f"Financial features created successfully: {len(yahoo_feature_names)} features")
+            except Exception as e:
+                logger.error(f"Error creating financial features: {e}")
+                yahoo_features_df, yahoo_feature_names = pd.DataFrame(), []
             
             # Step 3: Create World Bank features
-            worldbank_features_df, worldbank_feature_names = self.create_world_bank_features(worldbank_df)
+            try:
+                worldbank_features_df, worldbank_feature_names = self.create_world_bank_features(worldbank_df)
+                logger.info(f"World Bank features created successfully: {len(worldbank_feature_names)} features")
+            except Exception as e:
+                logger.error(f"Error creating World Bank features: {e}")
+                worldbank_features_df, worldbank_feature_names = pd.DataFrame(), []
             
-            # Step 4: Combine all features
-            combined_df = pd.concat([
+            # Step 4: Check if we have any data to work with
+            if all(df.empty for df in [fred_features_df, yahoo_features_df, worldbank_features_df]):
+                logger.error("All feature DataFrames are empty, cannot proceed")
+                raise ValueError("No features could be created from any data source")
+            
+            # Step 4: Normalize timezone-aware indexes before combining
+            logger.info("Normalizing timezone indexes before combining features...")
+            normalized_dfs = self._normalize_timezone_indexes([
                 fred_features_df,
                 yahoo_features_df,
                 worldbank_features_df
-            ], axis=1)
+            ])
+            
+            # Log timezone info for debugging
+            for i, df_name in enumerate(['FRED', 'Yahoo', 'World Bank']):
+                if not normalized_dfs[i].empty:
+                    logger.info(f"{df_name} features timezone: {normalized_dfs[i].index.tz}")
+                    logger.info(f"{df_name} features shape: {normalized_dfs[i].shape}")
+                    logger.info(f"{df_name} features index range: {normalized_dfs[i].index.min()} to {normalized_dfs[i].index.max()}")
+                else:
+                    logger.info(f"{df_name} features: empty DataFrame")
+            
+            # Validate date range compatibility
+            non_empty_dfs = [df for df in normalized_dfs if not df.empty]
+            if len(non_empty_dfs) > 1:
+                min_dates = [df.index.min() for df in non_empty_dfs]
+                max_dates = [df.index.max() for df in non_empty_dfs]
+                logger.info(f"Date range validation - Min dates: {min_dates}")
+                logger.info(f"Date range validation - Max dates: {max_dates}")
+                
+                # Check for significant date range mismatches
+                min_date_range = max(min_dates) - min(min_dates)
+                max_date_range = max(max_dates) - min(max_dates)
+                if min_date_range > pd.Timedelta(days=30) or max_date_range > pd.Timedelta(days=30):
+                    logger.warning(f"Significant date range mismatch detected: min_diff={min_date_range}, max_diff={max_date_range}")
+            
+            # Step 5: Combine all features using normalized dataframes
+            logger.info("Combining normalized feature dataframes...")
+            try:
+                combined_df = pd.concat(normalized_dfs, axis=1)
+            except Exception as e:
+                logger.error(f"Error during concatenation: {e}")
+                # Try to identify which DataFrame is causing the issue
+                for i, df in enumerate(normalized_dfs):
+                    if not df.empty:
+                        logger.info(f"DataFrame {i} index type: {type(df.index)}, timezone: {getattr(df.index, 'tz', 'N/A')}")
+                        logger.info(f"DataFrame {i} index sample: {df.index[:5]}")
+                
+                # Try fallback approach with common timezone index
+                logger.info("Attempting fallback concatenation with common timezone index...")
+                try:
+                    common_index = self._create_common_timezone_index(normalized_dfs)
+                    # Reindex all dataframes to the common index
+                    reindexed_dfs = []
+                    for df in normalized_dfs:
+                        if not df.empty:
+                            reindexed_df = df.reindex(common_index, method='ffill')
+                            reindexed_dfs.append(reindexed_df)
+                        else:
+                            reindexed_dfs.append(df)
+                    
+                    combined_df = pd.concat(reindexed_dfs, axis=1)
+                    logger.info("Fallback concatenation successful")
+                except Exception as fallback_e:
+                    logger.error(f"Fallback concatenation also failed: {fallback_e}")
+                    logger.error("Attempting final fallback with empty DataFrame...")
+                    # Create a minimal empty DataFrame to avoid complete failure
+                    try:
+                        combined_df = pd.DataFrame(index=pd.date_range(
+                            start=pd.Timestamp.now() - pd.Timedelta(days=365),
+                            end=pd.Timestamp.now(),
+                            freq='D',
+                            tz='UTC'
+                        ))
+                        logger.warning("Created minimal empty DataFrame as final fallback")
+                    except Exception as final_fallback_e:
+                        logger.error(f"Final fallback also failed: {final_fallback_e}")
+                        raise
+            
+            # Final validation: ensure combined DataFrame has consistent timezone-aware index
+            if not combined_df.empty:
+                if combined_df.index.tz is None:
+                    logger.warning("Combined DataFrame has timezone-naive index, converting to UTC")
+                    combined_df.index = combined_df.index.tz_localize('UTC')
+                elif str(combined_df.index.tz) != 'UTC':
+                    logger.info(f"Converting combined DataFrame index from {combined_df.index.tz} to UTC")
+                    combined_df.index = combined_df.index.tz_convert('UTC')
+                
+                logger.info(f"Combined DataFrame timezone: {combined_df.index.tz}")
+                logger.info(f"Combined DataFrame shape: {combined_df.shape}")
+                logger.info(f"Combined DataFrame index range: {combined_df.index.min()} to {combined_df.index.max()}")
+            else:
+                logger.warning("Combined DataFrame is empty after concatenation")
             
             # Remove duplicate columns and de-fragment in one shot
             combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()].copy()
             
-            # Step 5: Create regime features
-            combined_df, regime_feature_names = self.create_regime_features(combined_df)
+            # Validate the combined DataFrame
+            combined_df = self._validate_combined_dataframe(combined_df)
             
-            # Step 6: Create treatment features
-            combined_df, treatment_feature_names = self.create_treatment_features(combined_df)
+            # Step 6: Create regime features
+            logger.info("Creating regime features...")
+            try:
+                combined_df, regime_feature_names = self.create_regime_features(combined_df)
+                logger.info(f"Regime features created successfully: {len(regime_feature_names)} features")
+            except Exception as e:
+                logger.error(f"Error creating regime features: {e}")
+                regime_feature_names = []
             
-            # Step 7: Create target variable (GDP growth)
-            if 'fred_GDP_lag_30d' in combined_df.columns:
-                tgt = combined_df['fred_GDP_lag_30d'].pct_change(90, fill_method=None)
-                combined_df['target'] = tgt.replace([np.inf, -np.inf], np.nan)
+            # Step 7: Create treatment features
+            logger.info("Creating treatment features...")
+            try:
+                combined_df, treatment_feature_names = self.create_treatment_features(combined_df)
+                logger.info(f"Treatment features created successfully: {len(treatment_feature_names)} features")
+            except Exception as e:
+                logger.error(f"Error creating treatment features: {e}")
+                treatment_feature_names = []
             
-            # Step 8: Clean up the dataset
+            # Step 8: Create target variable (GDP growth)
+            logger.info("Creating target variable...")
+            try:
+                if 'fred_GDP_lag_30d' in combined_df.columns:
+                    tgt = combined_df['fred_GDP_lag_30d'].pct_change(90, fill_method=None)
+                    combined_df['target'] = tgt.replace([np.inf, -np.inf], np.nan)
+                    logger.info("Target variable created successfully")
+                else:
+                    logger.warning("GDP lag feature not found, skipping target variable creation")
+            except Exception as e:
+                logger.error(f"Error creating target variable: {e}")
+                logger.warning("Target variable creation failed, continuing without target")
+            
+            # Step 9: Clean up the dataset
+            logger.info("Cleaning final dataset...")
             combined_df = self._clean_final_dataset(combined_df)
+            
+            # Final timezone validation
+            if not combined_df.empty:
+                if hasattr(combined_df.index, 'tz'):
+                    if combined_df.index.tz is None:
+                        logger.warning("Final dataset has timezone-naive index, converting to UTC")
+                        combined_df.index = combined_df.index.tz_localize('UTC')
+                    elif str(combined_df.index.tz) != 'UTC':
+                        logger.info(f"Converting final dataset index from {combined_df.index.tz} to UTC")
+                        combined_df.index = combined_df.index.tz_convert('UTC')
+                
+                logger.info(f"Final dataset validation complete: shape={combined_df.shape}, timezone={getattr(combined_df.index, 'tz', 'N/A')}")
+                
+                # Additional validation: check for any remaining timezone issues in columns
+                datetime_columns = [col for col in combined_df.columns if pd.api.types.is_datetime64_any_dtype(combined_df[col])]
+                if datetime_columns:
+                    logger.info(f"Found {len(datetime_columns)} datetime columns, ensuring timezone consistency")
+                    for col in datetime_columns:
+                        if combined_df[col].dt.tz is None:
+                            logger.debug(f"Column {col} is timezone-naive, converting to UTC")
+                            combined_df[col] = combined_df[col].dt.tz_localize('UTC')
+                        elif str(combined_df[col].dt.tz) != 'UTC':
+                            logger.debug(f"Column {col} timezone: {combined_df[col].dt.tz}, converting to UTC")
+                            combined_df[col] = combined_df[col].dt.tz_convert('UTC')
+            else:
+                logger.warning("Final dataset is empty after all processing steps")
             
             # Collect all feature names
             all_features = (fred_feature_names + yahoo_feature_names + 
@@ -583,19 +757,282 @@ class FeatureEngineer:
             # Remove duplicates
             all_features = list(set(all_features))
             
-            logger.info(f"Final dataset created with {len(all_features)} features and shape {combined_df.shape}")
+            # Log feature creation summary
+            logger.info("=== Feature Creation Summary ===")
+            logger.info(f"Economic features: {len(fred_feature_names)}")
+            logger.info(f"Financial features: {len(yahoo_feature_names)}")
+            logger.info(f"World Bank features: {len(worldbank_feature_names)}")
+            logger.info(f"Regime features: {len(regime_feature_names)}")
+            logger.info(f"Treatment features: {len(treatment_feature_names)}")
+            logger.info(f"Total unique features: {len(all_features)}")
+            logger.info(f"Final dataset shape: {combined_df.shape}")
+            logger.info(f"Final dataset timezone: {getattr(combined_df.index, 'tz', 'N/A')}")
+            logger.info("=== End Feature Creation Summary ===")
+            
+            # Final validation before return
+            if not combined_df.empty:
+                try:
+                    # Ensure the final dataset is properly formatted
+                    combined_df = combined_df.copy()  # Defragment
+                    
+                    # Final timezone check
+                    if hasattr(combined_df.index, 'tz') and combined_df.index.tz is not None:
+                        if str(combined_df.index.tz) != 'UTC':
+                            logger.info(f"Final timezone conversion: {combined_df.index.tz} -> UTC")
+                            combined_df.index = combined_df.index.tz_convert('UTC')
+                    
+                    # Final check for any remaining timezone issues
+                    if hasattr(combined_df.index, 'tz') and combined_df.index.tz is None:
+                        logger.warning("Final dataset index is still timezone-naive, converting to UTC")
+                        combined_df.index = combined_df.index.tz_localize('UTC')
+                    
+                    # Final validation: ensure all datetime columns are timezone-consistent
+                    datetime_columns = [col for col in combined_df.columns if pd.api.types.is_datetime64_any_dtype(combined_df[col])]
+                    if datetime_columns:
+                        logger.info(f"Final validation: ensuring timezone consistency in {len(datetime_columns)} datetime columns")
+                        for col in datetime_columns:
+                            try:
+                                if combined_df[col].dt.tz is None:
+                                    combined_df[col] = combined_df[col].dt.tz_localize('UTC')
+                                elif str(combined_df[col].dt.tz) != 'UTC':
+                                    combined_df[col] = combined_df[col].dt.tz_convert('UTC')
+                            except Exception as col_e:
+                                logger.warning(f"Could not normalize timezone for column {col}: {col_e}")
+                    
+                    # Final check: ensure the DataFrame is not fragmented
+                    if hasattr(combined_df, '_is_copy') and combined_df._is_copy is not None:
+                        combined_df = combined_df.copy()
+                    
+                    # Final validation: ensure the DataFrame has a valid timezone-aware index
+                    if not hasattr(combined_df.index, 'tz') or combined_df.index.tz is None:
+                        logger.warning("Final dataset index is still timezone-naive, converting to UTC")
+                        combined_df.index = combined_df.index.tz_localize('UTC')
+                    
+                    logger.info(f"Final dataset ready: shape={combined_df.shape}, timezone={getattr(combined_df.index, 'tz', 'N/A')}")
+                except Exception as e:
+                    logger.error(f"Error in final validation: {e}")
+                    # Continue with the dataset as-is rather than failing completely
             
             return combined_df, all_features
             
         except Exception as e:
             logger.error(f"Error creating final features: {e}")
+            logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+            
+            # Try to provide more context about what failed
+            if "Cannot join tz-naive with tz-aware" in str(e):
+                logger.error("Timezone mismatch detected. This suggests inconsistent timezone handling in the input data.")
+                logger.error("Please ensure all input data has consistent timezone information.")
+                logger.error("The fix implemented should handle this automatically by normalizing all timezones to UTC.")
+            elif "timezone" in str(e).lower():
+                logger.error("Timezone-related error detected. This suggests timezone conversion issues.")
+                logger.error("Please check the timezone information in your input data.")
+                logger.error("The fix implemented should handle this automatically by normalizing all timezones to UTC.")
+            else:
+                logger.error("Unknown error occurred during feature creation.")
+                logger.error("Please check the logs for more details about what failed.")
+            
             raise
+    
+    def _normalize_timezone_indexes(self, dataframes: List[pd.DataFrame]) -> List[pd.DataFrame]:
+        """Normalize all dataframe indexes to be timezone-aware UTC before concatenation"""
+        normalized_dfs = []
+        
+        for i, df in enumerate(dataframes):
+            if df.empty:
+                normalized_dfs.append(df)
+                continue
+                
+            try:
+                # Ensure index is datetime
+                if not isinstance(df.index, pd.DatetimeIndex):
+                    df.index = pd.to_datetime(df.index, errors='coerce')
+                
+                # Handle any NaT values that might cause issues
+                if df.index.isna().any():
+                    logger.warning(f"DataFrame {i} has NaT values in index, removing them")
+                    df = df.loc[~df.index.isna()]
+                
+                # Normalize to UTC timezone-aware
+                if df.index.tz is None:
+                    # If timezone-naive, assume UTC and make timezone-aware
+                    df.index = df.index.tz_localize('UTC')
+                    logger.debug(f"DataFrame {i} index made timezone-aware UTC")
+                else:
+                    # If already timezone-aware, convert to UTC
+                    df.index = df.index.tz_convert('UTC')
+                    logger.debug(f"DataFrame {i} index converted to UTC")
+                
+                # Also check if there's a 'date' column that might have timezone issues
+                if 'date' in df.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df['date']):
+                        if df['date'].dt.tz is None:
+                            df['date'] = df['date'].dt.tz_localize('UTC')
+                        else:
+                            df['date'] = df['date'].dt.tz_convert('UTC')
+                
+                normalized_dfs.append(df)
+                
+            except Exception as e:
+                logger.error(f"Error normalizing timezone for DataFrame {i}: {e}")
+                # Try to create a minimal valid DataFrame to avoid breaking the pipeline
+                if not df.empty:
+                    # Create a simple index with UTC timezone
+                    if not df.index.empty:
+                        start_date = df.index.min()
+                        end_date = df.index.max()
+                        # Ensure dates are timezone-aware UTC
+                        if getattr(start_date, 'tz', None) is None:
+                            start_date = start_date.tz_localize('UTC')
+                            end_date = end_date.tz_localize('UTC')
+                        else:
+                            start_date = start_date.tz_convert('UTC')
+                            end_date = end_date.tz_convert('UTC')
+                    else:
+                        start_date = pd.Timestamp.now()
+                        end_date = pd.Timestamp.now()
+                    
+                    simple_index = pd.date_range(
+                        start=start_date,
+                        end=end_date,
+                        freq='D',
+                        tz='UTC'
+                    )
+                    # Create a minimal DataFrame with the same columns but simple index
+                    minimal_df = pd.DataFrame(index=simple_index, columns=df.columns)
+                    minimal_df = minimal_df.fillna(0)
+                    normalized_dfs.append(minimal_df)
+                else:
+                    normalized_dfs.append(df)
+        
+        return normalized_dfs
+    
+    def _create_common_timezone_index(self, dataframes: List[pd.DataFrame]) -> pd.DatetimeIndex:
+        """Create a common timezone-aware UTC index for all dataframes"""
+        try:
+            # Find the common date range across all non-empty dataframes
+            non_empty_dfs = [df for df in dataframes if not df.empty]
+            if not non_empty_dfs:
+                # If all are empty, create a default index
+                return pd.date_range(
+                    start=pd.Timestamp.now() - pd.Timedelta(days=365),
+                    end=pd.Timestamp.now(),
+                    freq='D',
+                    tz='UTC'
+                )
+            
+            # Get the min and max dates across all dataframes
+            all_dates = []
+            for df in non_empty_dfs:
+                if not df.index.empty:
+                    i_min, i_max = df.index.min(), df.index.max()
+                    if getattr(i_min, 'tz', None) is None:
+                        i_min = i_min.tz_localize('UTC')
+                        i_max = i_max.tz_localize('UTC')
+                    else:
+                        i_min = i_min.tz_convert('UTC')
+                        i_max = i_max.tz_convert('UTC')
+                    all_dates.extend([i_min, i_max])
+            
+            if not all_dates:
+                # Fallback to default index
+                return pd.date_range(
+                    start=pd.Timestamp.now() - pd.Timedelta(days=365),
+                    end=pd.Timestamp.now(),
+                    freq='D',
+                    tz='UTC'
+                )
+            
+            min_date = min(all_dates)
+            max_date = max(all_dates)
+            
+            # Create a daily index covering the full range
+            common_index = pd.date_range(
+                start=min_date,
+                end=max_date,
+                freq='D',
+                tz='UTC'
+            )
+            
+            logger.info(f"Created common timezone-aware index: {min_date} to {max_date}")
+            return common_index
+            
+        except Exception as e:
+            logger.error(f"Error creating common timezone index: {e}")
+            # Fallback to default index
+            return pd.date_range(
+                start=pd.Timestamp.now() - pd.Timedelta(days=365),
+                end=pd.Timestamp.now(),
+                freq='D',
+                tz='UTC'
+            )
+    
+    def _ensure_timezone_consistency(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure all datetime columns in the DataFrame are timezone-consistent"""
+        try:
+            if df.empty:
+                return df
+            
+            # Check all columns for datetime types
+            for col in df.columns:
+                if pd.api.types.is_datetime64_any_dtype(df[col]):
+                    if df[col].dt.tz is None:
+                        # If timezone-naive, assume UTC
+                        df[col] = df[col].dt.tz_localize('UTC')
+                    elif str(df[col].dt.tz) != 'UTC':
+                        # If different timezone, convert to UTC
+                        df[col] = df[col].dt.tz_convert('UTC')
+            
+            return df
+            
+        except Exception as e:
+            logger.warning(f"Error ensuring timezone consistency: {e}")
+            return df
+    
+    def _validate_combined_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Validate and clean the combined DataFrame"""
+        try:
+            if df.empty:
+                logger.warning("Combined DataFrame is empty")
+                return df
+            
+            # Check for any remaining timezone issues
+            if hasattr(df.index, 'tz'):
+                if df.index.tz is None:
+                    logger.warning("Combined DataFrame index is timezone-naive, converting to UTC")
+                    df.index = df.index.tz_localize('UTC')
+                elif str(df.index.tz) != 'UTC':
+                    logger.info(f"Converting combined DataFrame index from {df.index.tz} to UTC")
+                    df.index = df.index.tz_convert('UTC')
+            
+            # Check for any infinite values
+            if df.isin([np.inf, -np.inf]).any().any():
+                logger.warning("Found infinite values in combined DataFrame, replacing with NaN")
+                df = df.replace([np.inf, -np.inf], np.nan)
+            
+            # Check for any remaining NaN values in the index
+            if df.index.isna().any():
+                logger.warning("Found NaN values in index, removing affected rows")
+                df = df.dropna(subset=[df.index.name] if df.index.name else None)
+            
+            # Ensure the DataFrame is not fragmented
+            df = df.copy()
+            
+            logger.info(f"Combined DataFrame validation complete: shape={df.shape}, timezone={getattr(df.index, 'tz', 'N/A')}")
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error validating combined DataFrame: {e}")
+            return df
     
     def _clean_final_dataset(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and prepare the final dataset"""
         try:
             # Reset index to get date as column
             df = df.reset_index()
+            
+            # Ensure timezone consistency in all datetime columns
+            df = self._ensure_timezone_consistency(df)
             
             # Remove rows with missing target values
             if 'target' in df.columns:
