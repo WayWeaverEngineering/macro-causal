@@ -2,6 +2,8 @@
 
 A production-ready causal inference system for analyzing macroeconomic relationships with asset returns, designed to generate investment insights based on scientifically rigorous causal analysis.
 
+[Live website](https://macro-ai-analyst.wayweaver.com/)
+
 ## 🎯 Project Overview
 
 This system implements **X-Learner with Double Machine Learning (DML)** to identify causal relationships between macroeconomic shocks and asset returns. The approach separates correlation from causation, providing Bridgewater-style analytical rigor for macro-driven investment decisions.
