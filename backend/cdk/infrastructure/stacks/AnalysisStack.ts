@@ -7,7 +7,7 @@ import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { Role, ServicePrincipal, ManagedPolicy, PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 import { Table, AttributeType, BillingMode, ProjectionType } from "aws-cdk-lib/aws-dynamodb";
-import { AWS_QUEUE_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, DEFAULT_LAMBDA_NODEJS_RUNTIME, DEFAULT_QUEUE_TIMEOUT_MINS, DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME, LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME, OPEN_SEARCH_INTEGRATION_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from "@wayweaver/ariadne";
+import { AWS_QUEUE_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, DEFAULT_LAMBDA_NODEJS_RUNTIME, AWS_DYNAMODB_LAMBDA_LAYER_NAME, LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME, AWS_OPENSEARCH_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
 import { AwsConfig } from "../configs/AwsConfig";
 
@@ -68,8 +68,8 @@ export class AnalysisStack extends Stack {
 
     const commonUtilsLambdaLayer = props.lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
     const langChainLangGraphLambdaLayer = props.lambdaLayersStack.getLayer(LANGCHAIN_LANGGRAPH_LAMBDA_LAYER_NAME)
-    const openSearchIntegrationLambdaLayer = props.lambdaLayersStack.getLayer(OPEN_SEARCH_INTEGRATION_LAMBDA_LAYER_NAME)
-    const dynamodbIntegrationLambdaLayer = props.lambdaLayersStack.getLayer(DYNAMODB_INTEGRATION_LAMBDA_LAYER_NAME)
+    const openSearchIntegrationLambdaLayer = props.lambdaLayersStack.getLayer(AWS_OPENSEARCH_LAMBDA_LAYER_NAME)
+    const dynamodbIntegrationLambdaLayer = props.lambdaLayersStack.getLayer(AWS_DYNAMODB_LAMBDA_LAYER_NAME)
     const awsQueueLambdaLayer = props.lambdaLayersStack.getLayer(AWS_QUEUE_LAMBDA_LAYER_NAME)
 
 
