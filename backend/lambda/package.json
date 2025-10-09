@@ -23,7 +23,7 @@
     "@langchain/langgraph": "^0.2.73",
     "@langchain/openai": "^0.5.11",
     "@wayweaver/aws-queue": "2.1.0",
-    "axios": "^1.7.9",
+    "axios": "^1.12.2",
     "jsdom": "^24.0.0"
   },
   "overrides": {

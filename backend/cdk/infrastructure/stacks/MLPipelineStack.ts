@@ -6,7 +6,7 @@ import { DataCollectionStage } from '../stages/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { DataProcessingStage } from '../stages/DataProcessingStage';
 import { ModelTrainingStage } from '../stages/ModelTrainingStage';
-import { AWS_CLIENT_ECS_LAMBDA_LAYER_NAME, AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
+import { AWS_ECS_LAMBDA_LAYER_NAME, AWS_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
 import { ModelServingStage } from '../stages/ModelServingStage';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
@@ -28,8 +28,8 @@ export class MLPipelineStack extends Stack {
     });
 
     const commonUtilsLambdaLayer = props.lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
-    const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
-    const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_CLIENT_ECS_LAMBDA_LAYER_NAME)
+    const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
+    const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_ECS_LAMBDA_LAYER_NAME)
     
     const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
     const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
