@@ -1,7 +1,13 @@
-import { Box, Typography, Paper } from '@mui/material';
-import { Analytics } from '@mui/icons-material';
+import { Box, Typography, Paper, Button } from '@mui/material';
+import { Analytics, People, ArrowBack } from '@mui/icons-material';
 
-export const Header = () => {
+interface HeaderProps {
+  onNavigateToContributors?: () => void;
+  onBackToMain?: () => void;
+  currentView?: 'main' | 'contributors';
+}
+
+export const Header = ({ onNavigateToContributors, onBackToMain, currentView }: HeaderProps) => {
   return (
     <Paper 
       elevation={0} 
@@ -19,10 +25,47 @@ export const Header = () => {
             Macro Causal Inference AI Analyst
           </Typography>
         </Box>
-        <Typography variant="body1" sx={{ color: '#aaa', maxWidth: 600, mx: 'auto' }}>
+        <Typography variant="body1" sx={{ color: '#aaa', maxWidth: 600, mx: 'auto', mb: 2 }}>
           Ask questions about macroeconomic relationships and get AI-powered causal analysis using X-Learner 
           and Regime Classifier models. Understand true causal effects, not just correlations.
         </Typography>
+        
+        {/* Navigation Button */}
+        {currentView === 'main' && onNavigateToContributors && (
+          <Button
+            variant="outlined"
+            startIcon={<People />}
+            onClick={onNavigateToContributors}
+            sx={{
+              color: '#90caf9',
+              borderColor: '#90caf9',
+              '&:hover': {
+                backgroundColor: '#1a3a5f',
+                borderColor: '#64b5f6',
+              },
+            }}
+          >
+            Meet the Team
+          </Button>
+        )}
+        
+        {currentView === 'contributors' && onBackToMain && (
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBack />}
+            onClick={onBackToMain}
+            sx={{
+              color: '#90caf9',
+              borderColor: '#90caf9',
+              '&:hover': {
+                backgroundColor: '#1a3a5f',
+                borderColor: '#64b5f6',
+              },
+            }}
+          >
+            Back to Analyst
+          </Button>
+        )}
       </Box>
     </Paper>
   );
