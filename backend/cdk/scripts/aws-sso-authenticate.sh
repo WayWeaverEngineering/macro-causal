@@ -8,7 +8,7 @@ if [ -f .env.aws ]; then
   export $(grep -v '^#' .env.aws | xargs)
 fi
 
-# === Configurable Defaults (fallbacks if .env not set) ===
+# === Configurable Defaults (fallbacks if .env.aws not set) ===
 PROFILE_NAME="${AWS_PROFILE:-infra-dev}"
 SSO_SESSION_NAME="${AWS_SSO_SESSION:-infra-dev-sso-session}"
 SSO_START_URL="${AWS_SSO_START_URL:-https://d-9067d3aa2c.awsapps.com/start}"
@@ -59,5 +59,8 @@ echo "SSO profile configured."
 echo "Now logging in..."
 aws sso login --profile "$PROFILE_NAME"
 
+# Export AWS_PROFILE for current shell session
+export AWS_PROFILE="$PROFILE_NAME"
+
 echo "All done! Your AWS profile '$PROFILE_NAME' is now authenticated and ready to use."
-echo "Tip: export it with 'export AWS_PROFILE=$PROFILE_NAME'"
+echo "AWS_PROFILE has been exported to '$PROFILE_NAME' for this shell session."

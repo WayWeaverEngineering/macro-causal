@@ -5,11 +5,18 @@ set -euo pipefail
 : "${CI:=}"
 : "${CODEBUILD_BUILD_ID:=}"
 
+# === Load config from .env.aws if available ===
+if [ -f .env.aws ]; then
+  echo "Loading configuration from .env.aws..."
+  export $(grep -v '^#' .env.aws | xargs)
+fi
+
 # === Configurable Constants ===
 DOMAIN="wayweaver-shared-artifacts"
+DOMAIN_OWNER="715067592333"
 REPO="npm-typescript"
-REGION="us-east-1"
 SCOPE="@wayweaver"
+REGION="${AWS_DEPLOYMENT_REGION:-ap-southeast-1}"
 
 echo "Authenticating with AWS CodeArtifact..."
 
@@ -17,6 +24,9 @@ echo "Authenticating with AWS CodeArtifact..."
 if [ -n "$CI" ] || [ -n "$CODEBUILD_BUILD_ID" ]; then
   echo "CI/CD environment detected (CI=$CI, CODEBUILD_BUILD_ID=$CODEBUILD_BUILD_ID)"
   echo "Skipping .env.aws and AWS SSO checks. Assuming IAM role is preconfigured."
+
+  # Unset AWS_PROFILE to ensure AWS CLI uses IAM role credentials instead of profile
+  unset AWS_PROFILE
 
   export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}"
   export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}"
@@ -48,12 +58,14 @@ fi
 # === Get Auth Token and Registry URL ===
 AUTH_TOKEN=$(aws codeartifact get-authorization-token \
   --domain "$DOMAIN" \
+  --domain-owner "$DOMAIN_OWNER" \
   --region "$REGION" \
   --query authorizationToken \
   --output text)
 
 REGISTRY_URL=$(aws codeartifact get-repository-endpoint \
   --domain "$DOMAIN" \
+  --domain-owner "$DOMAIN_OWNER" \
   --repository "$REPO" \
   --format npm \
   --region "$REGION" \
