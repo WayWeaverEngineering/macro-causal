@@ -1,11 +1,10 @@
 import { Stack, Duration, RemovalPolicy } from "aws-cdk-lib";
 import * as path from "path";
 import { Construct } from "constructs";
-import { DefaultIdBuilder } from "../utils/Naming";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Function as LambdaFunction } from "aws-cdk-lib/aws-lambda";
 import { Table, AttributeType, BillingMode, ProjectionType } from "aws-cdk-lib/aws-dynamodb";
-import { PrebuiltLambdaLayers } from "@wayweaver/ariadne";
+import { PrebuiltLambdaLayers, ConstructIdBuilder } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
 import { AwsConfig } from "../configs/AwsConfig";
 import { AnalysisSchedulingLambdaStack } from "./AnalysisSchedulingLambdaStack";
@@ -16,6 +15,7 @@ import { AnalysisStatusLambdaStack } from "./AnalysisStatusLambdaStack";
 export type PrebuiltLambdaLayersStack = PrebuiltLambdaLayers;
 
 export interface AnalysisStackProps {
+  idBuilder: ConstructIdBuilder;
   lambdaLayersStack: PrebuiltLambdaLayersStack;
 }
 
@@ -30,7 +30,7 @@ export class AnalysisStack extends Stack {
     super(scope, id);
 
     // Create DynamoDB table for tracking analysis executions
-    const tableId = DefaultIdBuilder.build("analysis-executions-table");
+    const tableId = props.idBuilder.build("analysis-executions-table");
     this.analysisExecutionsTable = new Table(this, tableId, {
       tableName: tableId,
       partitionKey: { name: "executionId", type: AttributeType.STRING },
@@ -56,14 +56,14 @@ export class AnalysisStack extends Stack {
     });
 
     // Create SQS queue for analysis execution messages
-    const queueId = DefaultIdBuilder.build("analysis-executions-queue");
+    const queueId = props.idBuilder.build("analysis-executions-queue");
     this.analysisQueue = new Queue(this, queueId, {
       queueName: queueId,
       visibilityTimeout: AwsConfig.QUEUE_TIMEOUT_MINS,
       retentionPeriod: Duration.days(14),
       deadLetterQueue: {
-        queue: new Queue(this, DefaultIdBuilder.build("analysis-executions-dlq"), {
-          queueName: DefaultIdBuilder.build("analysis-executions-dlq"),
+        queue: new Queue(this, props.idBuilder.build("analysis-executions-dlq"), {
+          queueName: props.idBuilder.build("analysis-executions-dlq"),
           retentionPeriod: Duration.days(14),
         }),
         maxReceiveCount: 3,
@@ -71,14 +71,14 @@ export class AnalysisStack extends Stack {
     });
 
     const baseProps = {
-      idBuilder: DefaultIdBuilder,
+      idBuilder: props.idBuilder,
       prebuiltLambdaLayers: props.lambdaLayersStack,
       relativeLambdaCodePath: path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH),
     };
 
     const schedulingStack = new AnalysisSchedulingLambdaStack(
       this,
-      DefaultIdBuilder.build("analysis-scheduling-lambda-stack"),
+      props.idBuilder.build("analysis-scheduling-lambda-stack"),
       {
         ...baseProps,
         analysisExecutionQueue: this.analysisQueue,
@@ -88,7 +88,7 @@ export class AnalysisStack extends Stack {
 
     const processorStack = new AnalysisProcessorLambdaStack(
       this,
-      DefaultIdBuilder.build("analysis-processor-lambda-stack"),
+      props.idBuilder.build("analysis-processor-lambda-stack"),
       {
         ...baseProps,
         analysisExecutionQueue: this.analysisQueue,
@@ -98,7 +98,7 @@ export class AnalysisStack extends Stack {
 
     const statusStack = new AnalysisStatusLambdaStack(
       this,
-      DefaultIdBuilder.build("analysis-status-lambda-stack"),
+      props.idBuilder.build("analysis-status-lambda-stack"),
       {
         ...baseProps,
         analysisExecutionsTable: this.analysisExecutionsTable,

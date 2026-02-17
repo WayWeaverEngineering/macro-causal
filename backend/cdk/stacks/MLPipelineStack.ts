@@ -1,6 +1,6 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
-import { DefaultIdBuilder } from '../utils/Naming';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { DataLakeStack } from './DataLakeStack';
 import { DataCollectionStage } from '../stages/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -11,6 +11,7 @@ import { ModelServingStage } from '../stages/ModelServingStage';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export interface MLPipelineStackProps extends StackProps {
+  idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
   lambdaLayersStack: PrebuiltLambdaLayersStack;
   modelRegistryTable: dynamodb.Table;
@@ -22,7 +23,7 @@ export class MLPipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: MLPipelineStackProps) {
     super(scope, id, props);
 
-    const dataCollectionStageId = DefaultIdBuilder.build('data-collection-stage');
+    const dataCollectionStageId = props.idBuilder.build('data-collection-stage');
     const dataCollectionStage = new DataCollectionStage(this, dataCollectionStageId, {
       dataLakeStack: props.dataLakeStack
     });
@@ -31,14 +32,14 @@ export class MLPipelineStack extends Stack {
     const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
     const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_ECS_LAMBDA_LAYER_NAME)
     
-    const dataProcessingStageId = DefaultIdBuilder.build('data-processing-stage');
+    const dataProcessingStageId = props.idBuilder.build('data-processing-stage');
     const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
       dataLakeStack: props.dataLakeStack,
       commonUtilsLambdaLayer,
       emrServerlessLambdaLayer
     });
 
-    const modelTrainingStageId = DefaultIdBuilder.build('model-training-stage');
+    const modelTrainingStageId = props.idBuilder.build('model-training-stage');
     const modelTrainingStage = new ModelTrainingStage(this, modelTrainingStageId, {
       dataLakeStack: props.dataLakeStack,
       commonUtilsLambdaLayer,
@@ -46,7 +47,7 @@ export class MLPipelineStack extends Stack {
       modelRegistryTable: props.modelRegistryTable
     });
 
-    const modelServingStageId = DefaultIdBuilder.build('model-serving-stage');
+    const modelServingStageId = props.idBuilder.build('model-serving-stage');
     const modelServingStage = new ModelServingStage(this, modelServingStageId, {
       dataLakeStack: props.dataLakeStack,
       modelRegistryTable: props.modelRegistryTable
@@ -60,7 +61,7 @@ export class MLPipelineStack extends Stack {
       .next(modelServingStage);
 
     // Create the state machine
-    const stateMachineId = DefaultIdBuilder.build('ml-pipeline-state-machine');
+    const stateMachineId = props.idBuilder.build('ml-pipeline-state-machine');
     this.pipelineStateMachine = new sfn.StateMachine(this, stateMachineId, {
       definitionBody: sfn.DefinitionBody.fromChainable(mlWorkflow),
       stateMachineName: stateMachineId,

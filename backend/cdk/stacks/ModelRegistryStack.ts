@@ -1,10 +1,11 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, RemovalPolicy } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import { DefaultIdBuilder } from '../utils/Naming';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { MACRO_CAUSAL_CONSTANTS } from '../utils/Constants';
 
 export interface ModelRegistryStackProps extends StackProps {
+  idBuilder: ConstructIdBuilder;
   accountId: string;
   region: string;
 }
@@ -16,7 +17,7 @@ export class ModelRegistryStack extends Stack {
     super(scope, id, props);
 
     // Create DynamoDB table for model registry
-    const modelRegistryTableId = DefaultIdBuilder.build('model-registry-table');
+    const modelRegistryTableId = props.idBuilder.build('model-registry-table');
     this.modelRegistryTable = new dynamodb.Table(this, modelRegistryTableId, {
       tableName: `${modelRegistryTableId}-${props.accountId}`,
       partitionKey: {

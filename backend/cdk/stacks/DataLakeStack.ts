@@ -1,12 +1,13 @@
 import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import { DefaultIdBuilder } from '../utils/Naming';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { MACRO_CAUSAL_CONSTANTS } from '../utils/Constants';
 
 export interface DataLakeStackProps extends StackProps {
   accountId: string;
   region: string;
+  idBuilder: ConstructIdBuilder;
 }
 
 export class DataLakeStack extends Stack {
@@ -19,7 +20,7 @@ export class DataLakeStack extends Stack {
     super(scope, id, props);
 
     // Bronze bucket for raw data
-    const bronzeBucketId = DefaultIdBuilder.build('bronze-bucket');
+    const bronzeBucketId = props.idBuilder.build('bronze-bucket');
     this.bronzeBucket = new s3.Bucket(this, bronzeBucketId, {
       bucketName: `${bronzeBucketId}-${props.accountId}`,
       versioned: true,
@@ -47,7 +48,7 @@ export class DataLakeStack extends Stack {
     });
 
     // Silver bucket for processed data
-    const silverBucketId = DefaultIdBuilder.build('silver-bucket');
+    const silverBucketId = props.idBuilder.build('silver-bucket');
     this.silverBucket = new s3.Bucket(this, silverBucketId, {
       bucketName: `${silverBucketId}-${props.accountId}`,
       versioned: true,
@@ -71,7 +72,7 @@ export class DataLakeStack extends Stack {
     });
 
     // Gold bucket for feature-engineered data
-    const goldBucketId = DefaultIdBuilder.build('gold-bucket');
+    const goldBucketId = props.idBuilder.build('gold-bucket');
     this.goldBucket = new s3.Bucket(this, goldBucketId, {
       bucketName: `${goldBucketId}-${props.accountId}`,
       versioned: true,
@@ -89,7 +90,7 @@ export class DataLakeStack extends Stack {
     });
 
     // Artifacts bucket for model storage
-    const artifactsBucketId = DefaultIdBuilder.build('artifacts-bucket');
+    const artifactsBucketId = props.idBuilder.build('artifacts-bucket');
     this.artifactsBucket = new s3.Bucket(this, artifactsBucketId, {
       bucketName: `${artifactsBucketId}-${props.accountId}`,
       versioned: true,
