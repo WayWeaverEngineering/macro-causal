@@ -9,7 +9,7 @@ import { S3BucketOrigin } from "aws-cdk-lib/aws-cloudfront-origins";
 import { CanonicalUserPrincipal, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Certificate } from "aws-cdk-lib/aws-certificatemanager";
 import { AwsConfig } from "../configs/AwsConfig";
-import { DefaultIdBuilder } from "../../utils/Naming";
+import { DefaultIdBuilder } from "../utils/Naming";
 
 export class CloudFrontDistributionStack extends Stack {
 

@@ -1,8 +1,8 @@
 import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
+import { DefaultIdBuilder } from '../utils/Naming';
+import { MACRO_CAUSAL_CONSTANTS } from '../utils/Constants';
 
 export interface DataLakeStackProps extends StackProps {
   accountId: string;

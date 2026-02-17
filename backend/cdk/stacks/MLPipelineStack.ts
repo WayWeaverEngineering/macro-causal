@@ -1,6 +1,6 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
-import { DefaultIdBuilder } from '../../utils/Naming';
+import { DefaultIdBuilder } from '../utils/Naming';
 import { DataLakeStack } from './DataLakeStack';
 import { DataCollectionStage } from '../stages/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';

@@ -1,8 +1,8 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../../utils/Naming";
-import { EmrClusterConstruct } from "../constructs/EmrClusterConstruct";
+import { DefaultIdBuilder } from "../utils/Naming";
+import { EmrClusterConstruct } from "../infrastructure/constructs/EmrClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';

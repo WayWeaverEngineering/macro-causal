@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../../utils/Naming";
-import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
+import { DefaultIdBuilder } from "../utils/Naming";
+import { EcsFargateServiceConstruct } from "../infrastructure/constructs/EcsFargateServiceConstruct";
 
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';

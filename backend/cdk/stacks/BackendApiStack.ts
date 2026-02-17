@@ -1,7 +1,7 @@
 import { Stack, StackProps } from "aws-cdk-lib"
 import { Construct } from "constructs"
 import { Certificate } from "aws-cdk-lib/aws-certificatemanager"
-import { DefaultIdBuilder } from "../../utils/Naming"
+import { DefaultIdBuilder } from "../utils/Naming"
 import { HttpApi, DomainName, CorsHttpMethod, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2"
 import { Function as LambdaFunction } from "aws-cdk-lib/aws-lambda";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations"

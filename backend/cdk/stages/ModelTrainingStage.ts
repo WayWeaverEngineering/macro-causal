@@ -1,9 +1,9 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../../utils/Naming";
-import { MACRO_CAUSAL_CONSTANTS } from "../../utils/Constants";
-import { EksRayClusterConstruct } from "../constructs/EksRayClusterConstruct";
+import { DefaultIdBuilder } from "../utils/Naming";
+import { MACRO_CAUSAL_CONSTANTS } from "../utils/Constants";
+import { EksRayClusterConstruct } from "../infrastructure/constructs/EksRayClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';

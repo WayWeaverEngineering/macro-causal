@@ -1,6 +1,6 @@
 import { CodePipeline, CodePipelineSource, ShellStep } from "aws-cdk-lib/pipelines";
 import { Construct } from "constructs";
-import { GitHubConfig } from "../configs/GithubConfig";
+import { GitHubConfig } from "../../configs/GithubConfig";
 import { ComputeType, LinuxBuildImage } from "aws-cdk-lib/aws-codebuild";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { DefaultIdBuilder } from "../../utils/Naming";

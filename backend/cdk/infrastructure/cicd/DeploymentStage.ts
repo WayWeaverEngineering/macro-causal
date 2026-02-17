@@ -7,12 +7,12 @@ import {
   AWS_ADMIN_ACCOUNT_ID,
   PrebuiltLambdaLayersStack,
 } from "@wayweaver/ariadne";
-import { CloudFrontDistributionStack } from "../stacks/CloudFrontDistributionStack";
-import { DataLakeStack } from "../stacks/DataLakeStack";
-import { MLPipelineStack } from "../stacks/MLPipelineStack";
-import { ModelRegistryStack } from "../stacks/ModelRegistryStack";
-import { AnalysisStack } from "../stacks/AnalysisStack";
-import { BackendApiStack } from "../stacks/BackendApiStack";
+import { CloudFrontDistributionStack } from "../../stacks/CloudFrontDistributionStack";
+import { DataLakeStack } from "../../stacks/DataLakeStack";
+import { MLPipelineStack } from "../../stacks/MLPipelineStack";
+import { ModelRegistryStack } from "../../stacks/ModelRegistryStack";
+import { AnalysisStack } from "../../stacks/AnalysisStack";
+import { BackendApiStack } from "../../stacks/BackendApiStack";
 
 interface DeploymentStageProps extends StageProps {
   prebuiltLambdaLayerArns: LayerArns;
