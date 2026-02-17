@@ -24,7 +24,7 @@ export const MACRO_CAUSAL_CONSTANTS = {
 
   // EKS configurations
   EKS: {
-    KUBERNETES_VERSION: '1.28',
+    KUBERNETES_VERSION: '1.30',
     INSTANCE_TYPE: 'm5.large',
     MIN_SIZE: 1,
     MAX_SIZE: 10,

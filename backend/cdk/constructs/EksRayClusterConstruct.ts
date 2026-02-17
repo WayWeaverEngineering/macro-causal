@@ -4,7 +4,7 @@ import * as eks from 'aws-cdk-lib/aws-eks';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
+import { KubectlV30Layer } from '@aws-cdk/lambda-layer-kubectl-v30';
 import { MACRO_CAUSAL_CONSTANTS } from '../utils/Constants';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { ConstructIdBuilder } from '@wayweaver/ariadne';
@@ -51,12 +51,12 @@ export class EksRayClusterConstruct extends Construct {
     const clusterId = props.idBuilder.build('ray-cluster');
     this.cluster = new eks.Cluster(this, clusterId, {
       vpc,
-      version: eks.KubernetesVersion.V1_28,
+      version: eks.KubernetesVersion.V1_30,
       defaultCapacity: 0,
       clusterName: `${props.name}-ray-cluster`,
       // Public endpoint: reachable from internet and from within VPC
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      kubectlLayer: new KubectlV28Layer(this, props.idBuilder.build('kubectl-v28-layer')),
+      kubectlLayer: new KubectlV30Layer(this, props.idBuilder.build('kubectl-v30-layer')),
       // Ensure all cluster-managed resources land in public subnets
       vpcSubnets: [{ subnetType: ec2.SubnetType.PUBLIC }], // spans both AZs automatically
     });
