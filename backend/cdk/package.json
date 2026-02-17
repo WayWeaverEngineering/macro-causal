@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@aws-cdk/lambda-layer-kubectl-v30": "2.0.4",
-    "@wayweaver/ariadne": "41.6.0",
+    "@wayweaver/ariadne": "41.7.0",
     "aws-cdk-lib": "^2.173.4",
     "constructs": "^10.0.0",
     "source-map-support": "^0.5.21"
