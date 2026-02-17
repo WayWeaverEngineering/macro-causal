@@ -34,7 +34,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Create Docker image asset for data processing code
     const dataProcessingImageId = props.idBuilder.build('data-processing-image');
     const dataProcessingImage = new ecrAssets.DockerImageAsset(this, dataProcessingImageId, {
-      // IMPORTANT: the image path is relative to cdk.out
+      // IMPORTANT: the image path is relative to the cdk/ directory (where cdk synth is run from)
       directory: `../pipeline/${dataProcessingStageName}`,
       platform: ecrAssets.Platform.LINUX_AMD64,
       buildArgs: {

@@ -38,6 +38,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Create Docker image asset for model training code
     const modelTrainingImageId = props.idBuilder.build('model-training-image');
     const modelTrainingImage = new ecrAssets.DockerImageAsset(this, modelTrainingImageId, {
+      // IMPORTANT: the image path is relative to the cdk/ directory (where cdk synth is run from)
       directory: `../pipeline/${modelTrainingStageName}`,
       platform: ecrAssets.Platform.LINUX_AMD64,
       buildArgs: {

@@ -30,7 +30,7 @@ export class DataCollectionStage extends Construct implements sfn.IChainable {
     const dataCollectionEcs = new EcsFargateServiceConstruct(this, dataCollectionEcsId, {
       name: dataCollectionStageName,
       idBuilder: props.idBuilder,
-      // IMPORTANT: the image path is relative to cdk.out
+      // IMPORTANT: the image path is relative to the cdk/ directory (where cdk synth is run from)
       imagePath: `../pipeline/${dataCollectionStageName}`,
       environment: {
         BRONZE_BUCKET: props.dataLakeStack.bronzeBucket.bucketName,

@@ -37,7 +37,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     const modelServingService = new EcsFargateServiceConstruct(this, modelServingServiceId, {
       name: modelServingStageName,
       idBuilder: props.idBuilder,
-      // IMPORTANT: the image path is relative to cdk.out
+      // IMPORTANT: the image path is relative to the cdk/ directory (where cdk synth is run from)
       imagePath: `../pipeline/${modelServingStageName}`,
       cpu: 2048, // Higher CPU for model inference
       memoryLimitMiB: 4096, // Higher memory for model loading
