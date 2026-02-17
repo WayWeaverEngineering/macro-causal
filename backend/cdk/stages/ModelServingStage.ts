@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { ConstructIdBuilder } from '@wayweaver/ariadne';
-import { EcsFargateServiceConstruct } from "../infrastructure/constructs/EcsFargateServiceConstruct";
+import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
 
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -36,6 +36,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     // Create persistent ECS Fargate service for model serving
     const modelServingService = new EcsFargateServiceConstruct(this, modelServingServiceId, {
       name: modelServingStageName,
+      idBuilder: props.idBuilder,
       // IMPORTANT: the image path is relative to cdk.out
       imagePath: `../pipeline/${modelServingStageName}`,
       cpu: 2048, // Higher CPU for model inference

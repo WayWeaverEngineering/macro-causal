@@ -11,12 +11,9 @@ import { AnalysisSchedulingLambdaStack } from "./AnalysisSchedulingLambdaStack";
 import { AnalysisProcessorLambdaStack } from "./AnalysisProcessorLambdaStack";
 import { AnalysisStatusLambdaStack } from "./AnalysisStatusLambdaStack";
 
-// Alias so callers (e.g. DeploymentStage) can keep using the name PrebuiltLambdaLayersStack
-export type PrebuiltLambdaLayersStack = PrebuiltLambdaLayers;
-
 export interface AnalysisStackProps {
   idBuilder: ConstructIdBuilder;
-  lambdaLayersStack: PrebuiltLambdaLayersStack;
+  prebuiltLambdaLayers: PrebuiltLambdaLayers;
 }
 
 export class AnalysisStack extends Stack {
@@ -72,7 +69,7 @@ export class AnalysisStack extends Stack {
 
     const baseProps = {
       idBuilder: props.idBuilder,
-      prebuiltLambdaLayers: props.lambdaLayersStack,
+      prebuiltLambdaLayers: props.prebuiltLambdaLayers,
       relativeLambdaCodePath: path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH),
     };
 

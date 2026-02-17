@@ -12,7 +12,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 export interface MLPipelineStackProps extends StackProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  lambdaLayersStack: PrebuiltLambdaLayers;
+  prebuiltLambdaLayers: PrebuiltLambdaLayers;
   modelRegistryTable: dynamodb.Table;
 }
 
@@ -32,14 +32,14 @@ export class MLPipelineStack extends Stack {
     const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
       idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack,
-      lambdaLayersStack: props.lambdaLayersStack
+      prebuiltLambdaLayers: props.prebuiltLambdaLayers
     });
 
     const modelTrainingStageId = props.idBuilder.build('model-training-stage');
     const modelTrainingStage = new ModelTrainingStage(this, modelTrainingStageId, {
       idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack,
-      lambdaLayersStack: props.lambdaLayersStack,
+      prebuiltLambdaLayers: props.prebuiltLambdaLayers,
       modelRegistryTable: props.modelRegistryTable
     });
 

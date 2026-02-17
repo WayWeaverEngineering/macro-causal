@@ -2,10 +2,11 @@ import { Construct } from 'constructs';
 import * as emrserverless from 'aws-cdk-lib/aws-emrserverless';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { DefaultIdBuilder } from '../../utils/Naming';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 
 export interface EmrClusterProps {
   name: string;
+  idBuilder: ConstructIdBuilder;
   imageUri: string;
   bronzeBucket: s3.Bucket;
   silverBucket: s3.Bucket;
@@ -20,7 +21,7 @@ export class EmrClusterConstruct extends Construct {
     super(scope, id);
 
     // Create IAM role for EMR Serverless execution
-    const emrServerlessExecutionRoleId = DefaultIdBuilder.build('emr-serverless-execution-role');
+    const emrServerlessExecutionRoleId = props.idBuilder.build('emr-serverless-execution-role');
     this.executionRole = new iam.Role(this, emrServerlessExecutionRoleId, {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
     });
@@ -46,7 +47,7 @@ export class EmrClusterConstruct extends Construct {
     
 
     // Create EMR Serverless Application
-    const emrServerlessApplicationId = DefaultIdBuilder.build('emr-serverless-app');
+    const emrServerlessApplicationId = props.idBuilder.build('emr-serverless-app');
     this.application = new emrserverless.CfnApplication(this, emrServerlessApplicationId, {
       name: props.name,
       type: 'SPARK',

@@ -2,7 +2,7 @@ import { Construct } from "constructs";
 import { AwsConfig } from "../configs/AwsConfig";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { ConstructIdBuilder } from '@wayweaver/ariadne';
-import { EcsFargateServiceConstruct } from "../infrastructure/constructs/EcsFargateServiceConstruct";
+import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { Duration } from "aws-cdk-lib";
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -29,6 +29,7 @@ export class DataCollectionStage extends Construct implements sfn.IChainable {
     const dataCollectionEcsId = props.idBuilder.build(`${dataCollectionStageName}-ecs`);
     const dataCollectionEcs = new EcsFargateServiceConstruct(this, dataCollectionEcsId, {
       name: dataCollectionStageName,
+      idBuilder: props.idBuilder,
       // IMPORTANT: the image path is relative to cdk.out
       imagePath: `../pipeline/${dataCollectionStageName}`,
       environment: {

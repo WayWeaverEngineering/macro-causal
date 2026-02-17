@@ -2,7 +2,7 @@ import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { AWS_LAMBDA_LAYERS, ConstructIdBuilder, PrebuiltLambdaLayers, UTILS_LAMBDA_LAYERS } from '@wayweaver/ariadne';
-import { EmrClusterConstruct } from "../infrastructure/constructs/EmrClusterConstruct";
+import { EmrClusterConstruct } from "../constructs/EmrClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -15,7 +15,7 @@ import { LambdaConfig } from "../configs/LambdaConfig";
 export interface DataProcessingStageProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  lambdaLayersStack: PrebuiltLambdaLayers;
+  prebuiltLambdaLayers: PrebuiltLambdaLayers;
 }
 
 export class DataProcessingStage extends Construct implements sfn.IChainable {
@@ -51,7 +51,8 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
       imageUri: dataProcessingImage.imageUri,
       bronzeBucket: props.dataLakeStack.bronzeBucket,
       silverBucket: props.dataLakeStack.silverBucket,
-      goldBucket: props.dataLakeStack.goldBucket
+      goldBucket: props.dataLakeStack.goldBucket,
+      idBuilder: props.idBuilder,
     });
 
     // Create Lambda function to start EMR Serverless job
@@ -69,8 +70,8 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName
       },
       layers: [
-        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
-        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ]
     });
 
@@ -85,8 +86,8 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
         EMR_APPLICATION_ID: emrCluster.application.attrApplicationId
       },
       layers: [
-        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
-        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ]
     });
 

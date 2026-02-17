@@ -3,7 +3,7 @@ import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { AWS_LAMBDA_LAYERS, ConstructIdBuilder, PrebuiltLambdaLayers, UTILS_LAMBDA_LAYERS } from '@wayweaver/ariadne';
 import { MACRO_CAUSAL_CONSTANTS } from "../utils/Constants";
-import { EksRayClusterConstruct } from "../infrastructure/constructs/EksRayClusterConstruct";
+import { EksRayClusterConstruct } from "../constructs/EksRayClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -19,7 +19,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 export interface ModelTrainingStageProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  lambdaLayersStack: PrebuiltLambdaLayers;
+  prebuiltLambdaLayers: PrebuiltLambdaLayers;
   modelRegistryTable: dynamodb.Table;
 }
 
@@ -54,6 +54,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       goldBucket: props.dataLakeStack.goldBucket,
       artifactsBucket: props.dataLakeStack.artifactsBucket,
       modelRegistryTable: props.modelRegistryTable,
+      idBuilder: props.idBuilder,
     });
 
     // Create ECS cluster for Ray job orchestration
@@ -128,8 +129,8 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },
       layers: [
-        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
-        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ],
     });
 
@@ -147,8 +148,8 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },  
       layers: [
-        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
-        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
+        props.prebuiltLambdaLayers.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ],
     });
 

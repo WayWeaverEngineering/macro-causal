@@ -5,15 +5,16 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
-import { DefaultIdBuilder } from '../../utils/Naming';
-import { MACRO_CAUSAL_CONSTANTS } from '../../utils/Constants';
+import { MACRO_CAUSAL_CONSTANTS } from '../utils/Constants';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 
 export interface EksRayClusterProps {
   name: string;
   goldBucket: s3.Bucket;
   artifactsBucket: s3.Bucket;
   modelRegistryTable: dynamodb.Table;
+  idBuilder: ConstructIdBuilder;
 }
 
 export class EksRayClusterConstruct extends Construct {
@@ -26,7 +27,7 @@ export class EksRayClusterConstruct extends Construct {
 
     // Create VPC with 2 AZs and no NAT gateways for cost efficiency
     // EKS requires subnets from at least two AZs
-    const eksClusterVpcId = DefaultIdBuilder.build('eks-cluster-vpc');
+    const eksClusterVpcId = props.idBuilder.build('eks-cluster-vpc');
     const vpc = new ec2.Vpc(this, eksClusterVpcId, {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/21'), // Keep VPC small; adjust if you need more IPs
       maxAzs: 2,          // CRITICAL: EKS needs at least 2 AZs
@@ -47,7 +48,7 @@ export class EksRayClusterConstruct extends Construct {
     });
 
     // Create EKS cluster using public subnets across both AZs
-    const clusterId = DefaultIdBuilder.build('ray-cluster');
+    const clusterId = props.idBuilder.build('ray-cluster');
     this.cluster = new eks.Cluster(this, clusterId, {
       vpc,
       version: eks.KubernetesVersion.V1_28,
@@ -55,13 +56,13 @@ export class EksRayClusterConstruct extends Construct {
       clusterName: `${props.name}-ray-cluster`,
       // Public endpoint: reachable from internet and from within VPC
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      kubectlLayer: new KubectlV28Layer(this, DefaultIdBuilder.build('kubectl-v28-layer')),
+      kubectlLayer: new KubectlV28Layer(this, props.idBuilder.build('kubectl-v28-layer')),
       // Ensure all cluster-managed resources land in public subnets
       vpcSubnets: [{ subnetType: ec2.SubnetType.PUBLIC }], // spans both AZs automatically
     });
 
     // Add system node group for control plane add-ons in public subnets
-    const systemNodeGroupId = DefaultIdBuilder.build('system-node-group');
+    const systemNodeGroupId = props.idBuilder.build('system-node-group');
     this.cluster.addNodegroupCapacity(systemNodeGroupId, {
       subnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE)],
@@ -72,7 +73,7 @@ export class EksRayClusterConstruct extends Construct {
     });
 
     // Add Ray worker node group in public subnets
-    const rayNodeGroupId = DefaultIdBuilder.build('ray-node-group');
+    const rayNodeGroupId = props.idBuilder.build('ray-node-group');
     this.cluster.addNodegroupCapacity(rayNodeGroupId, {
       subnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceTypes: [
@@ -82,7 +83,7 @@ export class EksRayClusterConstruct extends Construct {
       minSize: MACRO_CAUSAL_CONSTANTS.EKS.MIN_SIZE,
       maxSize: MACRO_CAUSAL_CONSTANTS.EKS.MAX_SIZE,
       desiredSize: MACRO_CAUSAL_CONSTANTS.EKS.DESIRED_SIZE,
-      nodeRole: this.createNodeRole(),
+      nodeRole: this.createNodeRole(props.idBuilder),
       labels: {
         'ray.io/node-type': 'worker',
         'ray.io/cluster': props.name,
@@ -168,8 +169,8 @@ export class EksRayClusterConstruct extends Construct {
     this.createRayClusterManifest(props, rayNamespace, raySa);
   }
 
-  private createNodeRole(): iam.Role {
-    const nodeRoleId = DefaultIdBuilder.build('ray-node-role');
+  private createNodeRole(idBuilder: ConstructIdBuilder): iam.Role {
+    const nodeRoleId = idBuilder.build('ray-node-role');
     const nodeRole = new iam.Role(this, nodeRoleId, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [

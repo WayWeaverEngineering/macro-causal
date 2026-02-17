@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
-import { DefaultIdBuilder } from '../../utils/Naming';
+import { ConstructIdBuilder } from "@wayweaver/ariadne";
 
 export interface EcsFargateServiceProps {
   name: string;
@@ -12,6 +12,7 @@ export interface EcsFargateServiceProps {
   environment?: { [key: string]: string };
   persistent?: boolean; // Flag to control if service runs continuously
   assignPublicIp?: boolean;
+  idBuilder: ConstructIdBuilder;
 }
 
 export class EcsFargateServiceConstruct extends Construct {
@@ -21,21 +22,21 @@ export class EcsFargateServiceConstruct extends Construct {
   constructor(scope: Construct, id: string, props: EcsFargateServiceProps) {
     super(scope, id);
 
-    const clusterId = DefaultIdBuilder.build(`${props.name}-cluster`);
+    const clusterId = props.idBuilder.build(`${props.name}-cluster`);
     const cluster = new ecs.Cluster(this, clusterId);
 
-    const imgId = DefaultIdBuilder.build(`${props.name}-img`);
+    const imgId = props.idBuilder.build(`${props.name}-img`);
     const img = new ecrAssets.DockerImageAsset(this, imgId, {
       directory: props.imagePath,
       platform: ecrAssets.Platform.LINUX_AMD64,
     });
 
-    const taskId = DefaultIdBuilder.build(`${props.name}-task`);
+    const taskId = props.idBuilder.build(`${props.name}-task`);
     const task = new ecs.FargateTaskDefinition(this, taskId, {
       cpu: props.cpu || 1024, memoryLimitMiB: props.memoryLimitMiB || 2048,
     });
 
-    const containerId = DefaultIdBuilder.build(`${props.name}-container`);
+    const containerId = props.idBuilder.build(`${props.name}-container`);
     const container = task.addContainer(containerId, {
       image: ecs.ContainerImage.fromDockerImageAsset(img),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: props.name }),
@@ -49,7 +50,7 @@ export class EcsFargateServiceConstruct extends Construct {
       });
     }
 
-    const serviceId = DefaultIdBuilder.build(`${props.name}-service`);
+    const serviceId = props.idBuilder.build(`${props.name}-service`);
     this.service = new ecs.FargateService(this, serviceId, {
       cluster, 
       taskDefinition: task, 
