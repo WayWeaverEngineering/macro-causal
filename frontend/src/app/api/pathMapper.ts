@@ -1,5 +1,5 @@
 // API Gateway paths for Macro Causal Analysis
-const apiGatewayBaseUrl = "https://macro-ai-analyst-api.wayweaver.com"
+const apiGatewayBaseUrl = "https://macro-ai-analyst-api.harryfinance.ai"
 
 export const ApiGatewayPaths = {
   apiGatewayBaseUrl,
