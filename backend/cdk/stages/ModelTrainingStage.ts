@@ -1,10 +1,10 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { ConstructIdBuilder } from '@wayweaver/ariadne';
+import { AWS_LAMBDA_LAYERS, ConstructIdBuilder, PrebuiltLambdaLayers, UTILS_LAMBDA_LAYERS } from '@wayweaver/ariadne';
 import { MACRO_CAUSAL_CONSTANTS } from "../utils/Constants";
 import { EksRayClusterConstruct } from "../infrastructure/constructs/EksRayClusterConstruct";
-import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
+import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -19,8 +19,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 export interface ModelTrainingStageProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  commonUtilsLambdaLayer: ILayerVersion;
-  ecsLambdaLayer: ILayerVersion;
+  lambdaLayersStack: PrebuiltLambdaLayers;
   modelRegistryTable: dynamodb.Table;
 }
 
@@ -129,8 +128,8 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },
       layers: [
-        props.commonUtilsLambdaLayer,
-        props.ecsLambdaLayer,
+        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
+        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ],
     });
 
@@ -148,8 +147,8 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
         ASSIGN_PUBLIC_IP: 'ENABLED', // public subnets → enable public IP for internet access
       },  
       layers: [
-        props.commonUtilsLambdaLayer,
-        props.ecsLambdaLayer,
+        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_ECS_LAMBDA_LAYER),
+        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ],
     });
 

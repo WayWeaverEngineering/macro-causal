@@ -1,9 +1,9 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { ConstructIdBuilder } from '@wayweaver/ariadne';
+import { AWS_LAMBDA_LAYERS, ConstructIdBuilder, PrebuiltLambdaLayers, UTILS_LAMBDA_LAYERS } from '@wayweaver/ariadne';
 import { EmrClusterConstruct } from "../infrastructure/constructs/EmrClusterConstruct";
-import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
+import { Code as LambdaCode, Function as LambdaFunction } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -15,8 +15,7 @@ import { LambdaConfig } from "../configs/LambdaConfig";
 export interface DataProcessingStageProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  commonUtilsLambdaLayer: ILayerVersion;
-  emrServerlessLambdaLayer: ILayerVersion;
+  lambdaLayersStack: PrebuiltLambdaLayers;
 }
 
 export class DataProcessingStage extends Construct implements sfn.IChainable {
@@ -70,8 +69,8 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
         GOLD_BUCKET: props.dataLakeStack.goldBucket.bucketName
       },
       layers: [
-        props.commonUtilsLambdaLayer,
-        props.emrServerlessLambdaLayer
+        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
+        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ]
     });
 
@@ -86,8 +85,8 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
         EMR_APPLICATION_ID: emrCluster.application.attrApplicationId
       },
       layers: [
-        props.commonUtilsLambdaLayer,
-        props.emrServerlessLambdaLayer
+        props.lambdaLayersStack.getLayer(AWS_LAMBDA_LAYERS.AWS_EMR_SERVERLESS_LAMBDA_LAYER),
+        props.lambdaLayersStack.getLayer(UTILS_LAMBDA_LAYERS.LAMBDA_UTILS_LAMBDA_LAYER),
       ]
     });
 

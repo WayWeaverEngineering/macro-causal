@@ -1,19 +1,18 @@
 import { Construct } from 'constructs';
 import { Stack, StackProps, Duration } from 'aws-cdk-lib';
-import { ConstructIdBuilder } from '@wayweaver/ariadne';
+import { ConstructIdBuilder, PrebuiltLambdaLayers } from '@wayweaver/ariadne';
 import { DataLakeStack } from './DataLakeStack';
 import { DataCollectionStage } from '../stages/DataCollectionStage';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { DataProcessingStage } from '../stages/DataProcessingStage';
 import { ModelTrainingStage } from '../stages/ModelTrainingStage';
-import { AWS_ECS_LAMBDA_LAYER_NAME, AWS_EMR_SERVERLESS_LAMBDA_LAYER_NAME, COMMON_UTILS_LAMBDA_LAYER_NAME, PrebuiltLambdaLayersStack } from '@wayweaver/ariadne';
 import { ModelServingStage } from '../stages/ModelServingStage';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 
 export interface MLPipelineStackProps extends StackProps {
   idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
-  lambdaLayersStack: PrebuiltLambdaLayersStack;
+  lambdaLayersStack: PrebuiltLambdaLayers;
   modelRegistryTable: dynamodb.Table;
 }
 
@@ -25,30 +24,28 @@ export class MLPipelineStack extends Stack {
 
     const dataCollectionStageId = props.idBuilder.build('data-collection-stage');
     const dataCollectionStage = new DataCollectionStage(this, dataCollectionStageId, {
+      idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack
     });
-
-    const commonUtilsLambdaLayer = props.lambdaLayersStack.getLayer(COMMON_UTILS_LAMBDA_LAYER_NAME)
-    const emrServerlessLambdaLayer = props.lambdaLayersStack.getLayer(AWS_EMR_SERVERLESS_LAMBDA_LAYER_NAME)
-    const ecsLambdaLayer = props.lambdaLayersStack.getLayer(AWS_ECS_LAMBDA_LAYER_NAME)
     
     const dataProcessingStageId = props.idBuilder.build('data-processing-stage');
     const dataProcessingStage = new DataProcessingStage(this, dataProcessingStageId, {
+      idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack,
-      commonUtilsLambdaLayer,
-      emrServerlessLambdaLayer
+      lambdaLayersStack: props.lambdaLayersStack
     });
 
     const modelTrainingStageId = props.idBuilder.build('model-training-stage');
     const modelTrainingStage = new ModelTrainingStage(this, modelTrainingStageId, {
+      idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack,
-      commonUtilsLambdaLayer,
-      ecsLambdaLayer,
+      lambdaLayersStack: props.lambdaLayersStack,
       modelRegistryTable: props.modelRegistryTable
     });
 
     const modelServingStageId = props.idBuilder.build('model-serving-stage');
     const modelServingStage = new ModelServingStage(this, modelServingStageId, {
+      idBuilder: props.idBuilder,
       dataLakeStack: props.dataLakeStack,
       modelRegistryTable: props.modelRegistryTable
     });
