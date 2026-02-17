@@ -106,6 +106,10 @@ async function main() {
 
   const buildConfigs = createBuildConfigs(appName, gitHubRepo, {
     hasFrontendBuild: true,
+    preBuildCommands: [
+      "echo Upgrading pip...",
+      "python3 -m pip install --upgrade pip",
+    ]
   });
 
   const appBuildOptions: CdkAppBuildOptions = {
