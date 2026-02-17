@@ -1,6 +1,6 @@
 import { Construct } from "constructs";
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../utils/Naming";
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { EcsFargateServiceConstruct } from "../infrastructure/constructs/EcsFargateServiceConstruct";
 
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -14,6 +14,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { AwsConfig } from "../configs/AwsConfig";
 
 export interface ModelServingStageProps {
+  idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
   modelRegistryTable: dynamodb.Table;
 }
@@ -30,7 +31,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     this.id = id;
 
     const modelServingStageName = 'model-serving';
-    const modelServingServiceId = DefaultIdBuilder.build(`${modelServingStageName}-service`);
+    const modelServingServiceId = props.idBuilder.build(`${modelServingStageName}-service`);
     
     // Create persistent ECS Fargate service for model serving
     const modelServingService = new EcsFargateServiceConstruct(this, modelServingServiceId, {
@@ -54,7 +55,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
 
     // Create a public Application Load Balancer for the model serving service
     const vpc = modelServingService.service.cluster.vpc;
-    const albId = DefaultIdBuilder.build(`${modelServingStageName}-alb`);
+    const albId = props.idBuilder.build(`${modelServingStageName}-alb`);
     const alb = new elbv2.ApplicationLoadBalancer(this, albId, {
       vpc,
       internetFacing: true,
@@ -72,7 +73,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     // HTTPS listener with certificate
     const inferenceCert = acm.Certificate.fromCertificateArn(
       this,
-      DefaultIdBuilder.build('inference-domain-certificate'),
+      props.idBuilder.build('inference-domain-certificate'),
       AwsConfig.INFERENCE_DOMAIN_CERTIFICATE_ARN
     );
 
@@ -122,7 +123,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     props.dataLakeStack.goldBucket.grantWrite(modelServingService.service.taskDefinition.taskRole);
 
     // Create ECS task for model serving initialization
-    const modelServingTaskId = DefaultIdBuilder.build(`${modelServingStageName}-task`);
+    const modelServingTaskId = props.idBuilder.build(`${modelServingStageName}-task`);
     const modelServingTask = new tasks.EcsRunTask(this, modelServingTaskId, {
       stateName: "Deploying model serving service",
       comment: "Initialize model serving service and load models - using REQUEST_RESPONSE since service runs persistently",

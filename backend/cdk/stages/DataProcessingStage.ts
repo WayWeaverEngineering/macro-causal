@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../utils/Naming";
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { EmrClusterConstruct } from "../infrastructure/constructs/EmrClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -13,6 +13,7 @@ import { DEFAULT_LAMBDA_NODEJS_RUNTIME } from "@wayweaver/ariadne";
 import { LambdaConfig } from "../configs/LambdaConfig";
 
 export interface DataProcessingStageProps {
+  idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
   commonUtilsLambdaLayer: ILayerVersion;
   emrServerlessLambdaLayer: ILayerVersion;
@@ -32,7 +33,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     const dataProcessingStageName = 'data-processing';
 
     // Create Docker image asset for data processing code
-    const dataProcessingImageId = DefaultIdBuilder.build('data-processing-image');
+    const dataProcessingImageId = props.idBuilder.build('data-processing-image');
     const dataProcessingImage = new ecrAssets.DockerImageAsset(this, dataProcessingImageId, {
       // IMPORTANT: the image path is relative to cdk.out
       directory: `../pipeline/${dataProcessingStageName}`,
@@ -44,7 +45,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     });
 
     
-    const dataProcessingEmrId = DefaultIdBuilder.build(`${dataProcessingStageName}-emr`);
+    const dataProcessingEmrId = props.idBuilder.build(`${dataProcessingStageName}-emr`);
     const emrCluster = new EmrClusterConstruct(
       this, dataProcessingEmrId, {
       name: dataProcessingStageName,
@@ -55,7 +56,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     });
 
     // Create Lambda function to start EMR Serverless job
-    const startJobLambdaId = DefaultIdBuilder.build('start-emr-job-lambda');
+    const startJobLambdaId = props.idBuilder.build('start-emr-job-lambda');
     const startJobLambda = new LambdaFunction(this, startJobLambdaId, {
       code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'StartEmrJob.handler',
@@ -75,7 +76,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     });
 
     // Create Lambda function to check EMR job status
-    const checkStatusLambdaId = DefaultIdBuilder.build('check-emr-status-lambda');
+    const checkStatusLambdaId = props.idBuilder.build('check-emr-status-lambda');
     const checkStatusLambda = new LambdaFunction(this, checkStatusLambdaId, {
       code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'CheckEmrStatus.handler',
@@ -122,7 +123,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     props.dataLakeStack.bronzeBucket.grantRead(startJobLambda);
 
     // Task to start EMR job
-    const startJobTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-start-job`);
+    const startJobTaskId = props.idBuilder.build(`${dataProcessingStageName}-start-job`);
     const startJobTask = new tasks.LambdaInvoke(this, startJobTaskId, {
       stateName: "Start data processing Spark job",
       lambdaFunction: startJobLambda,
@@ -134,7 +135,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     });
 
     // Task to check job status
-    const checkStatusTaskId = DefaultIdBuilder.build(`${dataProcessingStageName}-check-status`);
+    const checkStatusTaskId = props.idBuilder.build(`${dataProcessingStageName}-check-status`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
       stateName: "Polling Spark job status",
       lambdaFunction: checkStatusLambda,
@@ -145,7 +146,7 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     });
 
     // Wait state before checking status
-    const waitStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-wait`);
+    const waitStateId = props.idBuilder.build(`${dataProcessingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
       stateName: "Waiting for Spark job",
       time: sfn.WaitTime.duration(Duration.seconds(30))
@@ -154,20 +155,20 @@ export class DataProcessingStage extends Construct implements sfn.IChainable {
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
 
-    const successStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-success`);
+    const successStateId = props.idBuilder.build(`${dataProcessingStageName}-success`);
     const successState = new sfn.Pass(this, successStateId, {
       stateName: "Data processing stage succeeded",
       comment: 'Data processing stage finished successfully'
     });
 
-    const failureStateId = DefaultIdBuilder.build(`${dataProcessingStageName}-failed`);
+    const failureStateId = props.idBuilder.build(`${dataProcessingStageName}-failed`);
     const failureState = new sfn.Fail(this, failureStateId, {
       stateName: "Data processing stage failed",
       comment: 'Data processing stage encountered an error'
     });
 
     // Create a choice state to check job status
-    const jobStatusChoiceId = DefaultIdBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
+    const jobStatusChoiceId = props.idBuilder.build(`${dataProcessingStageName}-job-complete-choice`);
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: "Spark job status?"
     }).when(sfn.Condition.stringEquals('$.jobStatus.Payload.status', 'FAILED'), failureState)

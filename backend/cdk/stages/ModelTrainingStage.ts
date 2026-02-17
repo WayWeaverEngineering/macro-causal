@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import * as path from 'path';
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { DefaultIdBuilder } from "../utils/Naming";
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { MACRO_CAUSAL_CONSTANTS } from "../utils/Constants";
 import { EksRayClusterConstruct } from "../infrastructure/constructs/EksRayClusterConstruct";
 import { Code as LambdaCode, Function as LambdaFunction, ILayerVersion } from "aws-cdk-lib/aws-lambda"
@@ -17,6 +17,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
 export interface ModelTrainingStageProps {
+  idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
   commonUtilsLambdaLayer: ILayerVersion;
   ecsLambdaLayer: ILayerVersion;
@@ -36,7 +37,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     const modelTrainingStageName = 'model-training';
 
     // Create Docker image asset for model training code
-    const modelTrainingImageId = DefaultIdBuilder.build('model-training-image');
+    const modelTrainingImageId = props.idBuilder.build('model-training-image');
     const modelTrainingImage = new ecrAssets.DockerImageAsset(this, modelTrainingImageId, {
       directory: `../pipeline/${modelTrainingStageName}`,
       platform: ecrAssets.Platform.LINUX_AMD64,
@@ -48,7 +49,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create EKS cluster for Ray training
-    const rayClusterId = DefaultIdBuilder.build('ray-cluster');
+    const rayClusterId = props.idBuilder.build('ray-cluster');
     const rayCluster = new EksRayClusterConstruct(this, rayClusterId, {
       name: modelTrainingStageName,
       goldBucket: props.dataLakeStack.goldBucket,
@@ -59,7 +60,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Create ECS cluster for Ray job orchestration
     // IMPORTANT: ECS cluster must be in the SAME VPC as EKS cluster for Fargate tasks
     // to reach the private EKS API endpoint without NAT gateways
-    const ecsClusterId = DefaultIdBuilder.build('ray-ecs-cluster');
+    const ecsClusterId = props.idBuilder.build('ray-ecs-cluster');
     const ecsCluster = new ecs.Cluster(this, ecsClusterId, {
       vpc: rayCluster.cluster.vpc,             // <— SAME VPC AS EKS
       enableFargateCapacityProviders: true,
@@ -68,7 +69,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Add a Security Group for Fargate tasks
     // This SG allows outbound access to VPC endpoints (EKS, ECR, Logs, S3, STS, EC2)
     // No inbound rules needed - tasks only need to reach AWS services via endpoints
-    const taskSg = new ec2.SecurityGroup(this, DefaultIdBuilder.build('ray-ecs-task-sg'), {
+    const taskSg = new ec2.SecurityGroup(this, props.idBuilder.build('ray-ecs-task-sg'), {
       vpc: ecsCluster.vpc,
       description: 'SG for Ray training Fargate tasks',
       allowAllOutbound: true, // Needed for VPC endpoints, ECR, CW Logs, etc.
@@ -82,16 +83,16 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     }).subnetIds;
 
     // Create ECS task definition for Ray training
-    const taskDefinitionId = DefaultIdBuilder.build('ray-training-task');
+    const taskDefinitionId = props.idBuilder.build('ray-training-task');
     const taskDefinition = new ecs.FargateTaskDefinition(this, taskDefinitionId, {
       cpu: 2048,
       memoryLimitMiB: 4096,
       taskRole: this.createTaskRole(props),
-      executionRole: this.createExecutionRole(),
+      executionRole: this.createExecutionRole(props.idBuilder),
     });
 
     // Add container to task definition
-    const containerId = DefaultIdBuilder.build('ray-training-container');
+    const containerId = props.idBuilder.build('ray-training-container');
     const container = taskDefinition.addContainer(containerId, {
       image: ecs.ContainerImage.fromDockerImageAsset(modelTrainingImage),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: modelTrainingStageName }),
@@ -108,7 +109,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create Lambda function to start Ray training job
-    const startTrainingLambdaId = DefaultIdBuilder.build('start-ray-training-lambda');
+    const startTrainingLambdaId = props.idBuilder.build('start-ray-training-lambda');
     const startTrainingLambda = new LambdaFunction(this, startTrainingLambdaId, {
       code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'StartRayTraining.handler',
@@ -134,7 +135,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create Lambda function to check Ray training job status
-    const checkTrainingStatusLambdaId = DefaultIdBuilder.build('check-ray-training-status-lambda');
+    const checkTrainingStatusLambdaId = props.idBuilder.build('check-ray-training-status-lambda');
     const checkTrainingStatusLambda = new LambdaFunction(this, checkTrainingStatusLambdaId, {
       code: LambdaCode.fromAsset(path.join(__dirname, LambdaConfig.LAMBDA_CODE_RELATIVE_PATH)),
       handler: 'CheckRayTrainingStatus.handler',
@@ -192,7 +193,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create Step Functions tasks
-    const startTrainingTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-start-task`);
+    const startTrainingTaskId = props.idBuilder.build(`${modelTrainingStageName}-start-task`);
     const startTrainingTask = new tasks.LambdaInvoke(this, startTrainingTaskId, {
       stateName: "Start Ray EKS training job",
       comment: 'Start Ray training job on EKS',
@@ -205,7 +206,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
       })
     });
 
-    const checkStatusTaskId = DefaultIdBuilder.build(`${modelTrainingStageName}-check-status-task`);
+    const checkStatusTaskId = props.idBuilder.build(`${modelTrainingStageName}-check-status-task`);
     const checkStatusTask = new tasks.LambdaInvoke(this, checkStatusTaskId, {
       stateName: "Polling Ray EKS job status",
       comment: 'Check Ray training job status',
@@ -219,7 +220,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     });
 
     // Create wait state
-    const waitStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-wait`);
+    const waitStateId = props.idBuilder.build(`${modelTrainingStageName}-wait`);
     const waitState = new sfn.Wait(this, waitStateId, {
       stateName: "Waiting for Ray EKS job",
       time: sfn.WaitTime.duration(Duration.seconds(30)),
@@ -228,20 +229,20 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     // Connect wait state back to check status task
     waitState.next(checkStatusTask);
 
-    const successStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-success`);
+    const successStateId = props.idBuilder.build(`${modelTrainingStageName}-success`);
     const successState = new sfn.Pass(this, successStateId, {
       stateName: "Model training stage succeeded",
       comment: 'Model training stage finished successfully',
     });
 
-    const failureStateId = DefaultIdBuilder.build(`${modelTrainingStageName}-failed`);
+    const failureStateId = props.idBuilder.build(`${modelTrainingStageName}-failed`);
     const failureState = new sfn.Fail(this, failureStateId, {
       stateName: "Model training stage failed",
       comment: 'Model training stage encountered an error',
     });
 
     // Create a choice state to check job status
-    const jobStatusChoiceId = DefaultIdBuilder.build(`${modelTrainingStageName}-job-complete-choice`);
+    const jobStatusChoiceId = props.idBuilder.build(`${modelTrainingStageName}-job-complete-choice`);
     const jobStatusChoice = new sfn.Choice(this, jobStatusChoiceId, {
       stateName: "Ray EKS job status?",
     })
@@ -257,7 +258,7 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
   }
 
   private createTaskRole(props: ModelTrainingStageProps): iam.Role {
-    const taskRoleId = DefaultIdBuilder.build('ray-training-task-role');
+    const taskRoleId = props.idBuilder.build('ray-training-task-role');
     const taskRole = new iam.Role(this, taskRoleId, {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
@@ -305,8 +306,8 @@ export class ModelTrainingStage extends Construct implements sfn.IChainable {
     return taskRole;
   }
 
-  private createExecutionRole(): iam.Role {
-    const executionRoleId = DefaultIdBuilder.build('ray-training-execution-role');
+  private createExecutionRole(idBuilder: ConstructIdBuilder): iam.Role {
+    const executionRoleId = idBuilder.build('ray-training-execution-role');
     const executionRole = new iam.Role(this, executionRoleId, {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [

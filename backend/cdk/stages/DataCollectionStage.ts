@@ -1,7 +1,7 @@
 import { Construct } from "constructs";
 import { AwsConfig } from "../configs/AwsConfig";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { DefaultIdBuilder } from "../utils/Naming";
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { EcsFargateServiceConstruct } from "../infrastructure/constructs/EcsFargateServiceConstruct";
 import { DataLakeStack } from "../stacks/DataLakeStack";
 import { Duration } from "aws-cdk-lib";
@@ -10,6 +10,7 @@ import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 
 export interface DataCollectionStageProps {
+  idBuilder: ConstructIdBuilder;
   dataLakeStack: DataLakeStack;
 }
 
@@ -25,7 +26,7 @@ export class DataCollectionStage extends Construct implements sfn.IChainable {
     this.id = id;
 
     const dataCollectionStageName = 'data-collection';
-    const dataCollectionEcsId = DefaultIdBuilder.build(`${dataCollectionStageName}-ecs`);
+    const dataCollectionEcsId = props.idBuilder.build(`${dataCollectionStageName}-ecs`);
     const dataCollectionEcs = new EcsFargateServiceConstruct(this, dataCollectionEcsId, {
       name: dataCollectionStageName,
       // IMPORTANT: the image path is relative to cdk.out
@@ -51,7 +52,7 @@ export class DataCollectionStage extends Construct implements sfn.IChainable {
     // Enable data collection stage to write raw data to bronze bucket
     props.dataLakeStack.bronzeBucket.grantReadWrite(dataCollectionEcs.service.taskDefinition.taskRole);
 
-    const dataCollectionTaskId = DefaultIdBuilder.build(`${dataCollectionStageName}-task`);
+    const dataCollectionTaskId = props.idBuilder.build(`${dataCollectionStageName}-task`);
     const dataCollectionTask = new tasks.EcsRunTask(this, dataCollectionTaskId, {
       stateName: "Collecting training data",
       comment: "Data collection using Dockerized Python application on ECS Fargate",
