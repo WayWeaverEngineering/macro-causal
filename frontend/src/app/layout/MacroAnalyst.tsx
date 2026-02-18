@@ -3,7 +3,7 @@ import { QueryInput } from '../components/QueryInput';
 import { AnalysisStatus } from '../components/AnalysisStatus';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
 import { Header } from '../components/Header';
-import { Contributors } from '../components/Contributors';
+import { AboutMePage } from '../components/AboutMePage';
 import { useState } from 'react';
 import PipelineSvg from '../images/ml-pipeline-success.svg';
 
@@ -119,7 +119,7 @@ function MacroAnalyst() {
             </Dialog>
           </>
         ) : (
-          <Contributors />
+          <AboutMePage />
         )}
       </Box>
     </ThemeProvider>

@@ -1,5 +1,5 @@
 import { Box, Typography, Paper, Button } from '@mui/material';
-import { Analytics, People, ArrowBack } from '@mui/icons-material';
+import { Analytics, Person, ArrowBack } from '@mui/icons-material';
 
 interface HeaderProps {
   onNavigateToContributors?: () => void;
@@ -25,16 +25,19 @@ export const Header = ({ onNavigateToContributors, onBackToMain, currentView }: 
             Macro Causal Inference AI Analyst
           </Typography>
         </Box>
-        <Typography variant="body1" sx={{ color: '#aaa', maxWidth: 600, mx: 'auto', mb: 2 }}>
+        <Typography variant="body1" sx={{ color: '#aaa', maxWidth: 600, mx: 'auto', mb: 1 }}>
           Ask questions about macroeconomic relationships and get AI-powered causal analysis using X-Learner 
-          and Regime Classifier models. Understand true causal effects, not just correlations.
+          and Regime Classifier models.
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#888', maxWidth: 1200, mx: 'auto', mb: 2, fontStyle: 'italic' }}>
+          This demonstration is for illustrative purposes only and is intended to showcase the architecture and implementation of an AI-powered finance platform. It does not represent or warrant model performance, accuracy, or fitness for any particular purpose. Nothing herein constitutes financial, investment, or legal advice; do not rely on it as such.
         </Typography>
         
         {/* Navigation Button */}
         {currentView === 'main' && onNavigateToContributors && (
           <Button
             variant="outlined"
-            startIcon={<People />}
+            startIcon={<Person />}
             onClick={onNavigateToContributors}
             sx={{
               color: '#90caf9',
@@ -45,7 +48,7 @@ export const Header = ({ onNavigateToContributors, onBackToMain, currentView }: 
               },
             }}
           >
-            Meet the Team
+            About Me
           </Button>
         )}
         
