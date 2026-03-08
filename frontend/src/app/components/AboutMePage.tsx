@@ -61,21 +61,21 @@ export const AboutMePage = () => {
           gutterBottom
           sx={{ color: '#ccc', textAlign: 'justify', maxWidth: '100%', mb: 2 }}
         >
-          I'm an Agentic AI & ML Engineer focused on building automated research and investment intelligence systems for institutional finance. My work centers on integrating large-scale financial data—SEC filings, macroeconomic time series, and market datasets—with LLMs, custom ML models, and structured multi-step reasoning agents to support rigorous analytical workflows.
+          I build production-grade AI systems that help portfolio managers and investment analysts move faster without sacrificing rigor by compressing research cycles, improving traceability, and making AI outputs trustworthy enough for high-stakes institutional decisions. My focus is not generic GenAI experimentation, but turning fragmented, high-friction research processes into reusable, PM-facing systems that actually get adopted.
         </Typography>
         <Typography
           variant="body1"
           gutterBottom
           sx={{ color: '#ccc', textAlign: 'justify', maxWidth: '100%', mb: 2 }}
         >
-          I've designed causal inference models to quantify the effects of macroeconomic shocks, built large-scale RAG systems indexing tens of gigabytes of financial filings for cross-company and temporal analysis, and engineered agentic research pipelines capable of evidence retrieval, structured synthesis, claim validation, and scenario comparison. Across projects, I prioritize signal extraction, explainability, reproducibility, and system robustness over superficial generative outputs.
+          As the sole AI engineer at a fintech startup serving institutional buy-side firms — hedge funds, PE firms, and investment banks — I own most of the company's AI product architecture on AWS. I build institutional research agents, retrieval-backed fact-checking systems, and agentic financial assistants that surface relevant information from unstructured data and automate repeatable analytical work. I also own the evaluation and reliability layer that keeps these systems measurable and production-ready as they scale.
         </Typography>
         <Typography
           variant="body1"
           gutterBottom
           sx={{ color: '#ccc', textAlign: 'justify', maxWidth: '100%', mb: 2 }}
         >
-          As the sole AI engineer at a fintech startup serving buy-side firms, I architect production-grade research infrastructure on AWS—owning model design, retrieval optimization, agent orchestration, and scalable deployment. My goal is to build systems that augment analysts and PMs by automating repeatable research tasks, structuring unstructured data, and enabling faster, more disciplined investment decision-making.
+          My background combines deep AI/ML engineering with end-to-end product execution across the full stack — from LLM architecture, RAG pipelines, and agentic workflows through backend APIs, cloud infrastructure, and user-facing React applications. That full-stack ownership is deliberate: systems only create value if users trust them, and trust requires getting the UI, the reasoning trace, and the underlying reliability right simultaneously. Across everything I build, I optimize for business impact, workflow adoption, and disciplined system design — not model novelty.
         </Typography>
       </Box>
     </Container>
