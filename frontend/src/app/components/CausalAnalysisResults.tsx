@@ -1,8 +1,6 @@
-import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { 
   Box, 
-  Button,
   Paper, 
   Typography, 
   Chip,
@@ -12,6 +10,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Stack,
   Collapse
 } from '@mui/material';
 import { 
@@ -24,14 +23,17 @@ import {
   Timeline,
   Assessment,
   Science,
-  Info
+  Info,
+  Error,
+  Schedule,
+  PlayArrow
 } from '@mui/icons-material';
 import { 
   selectCurrentAnalysis, 
   selectHasResults,
   selectExecutionSteps
 } from '../../redux/selectors';
-import { ExecutionDetailsModal } from './ExecutionDetailsModal';
+import type { ExecutionStep } from '../../models/analysis';
 
 const formatConfidence = (confidence: number) => {
   return `${Math.round(confidence * 100)}%`;
@@ -56,8 +58,100 @@ const getEffectColor = (effect: number) => {
   return '#ff9800';
 };
 
+const getStepIcon = (status: string) => {
+  switch (status) {
+    case 'completed':
+      return <CheckCircle sx={{ color: '#4caf50', fontSize: 20 }} />;
+    case 'in_progress':
+      return <PlayArrow sx={{ color: '#90caf9', fontSize: 20 }} />;
+    case 'failed':
+      return <Error sx={{ color: '#f44336', fontSize: 20 }} />;
+    default:
+      return <Schedule sx={{ color: '#888', fontSize: 20 }} />;
+  }
+};
+
+const renderStepMetadata = (step: ExecutionStep) => {
+  const meta = step.metadata;
+  if (!meta || Object.keys(meta).length === 0) return null;
+
+  const items: { label: string; content: React.ReactNode; icon?: React.ReactNode }[] = [];
+
+  if (meta.query) {
+    items.push({
+      label: 'User Query',
+      content: <Typography variant="body2" sx={{ color: '#ccc', lineHeight: 1.6 }}>{meta.query}</Typography>,
+      icon: <Psychology sx={{ fontSize: 18, color: '#90caf9', mr: 0.5 }} />,
+    });
+  }
+
+  if (meta.modelInputs) {
+    items.push({
+      label: 'Model Inputs',
+      content: (
+        <Typography variant="body2" sx={{ color: '#888', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+          {typeof meta.modelInputs === 'string' ? meta.modelInputs : JSON.stringify(meta.modelInputs, null, 2)}
+        </Typography>
+      ),
+      icon: <Science sx={{ fontSize: 18, color: '#90caf9', mr: 0.5 }} />,
+    });
+  }
+
+  if (meta.modelResults) {
+    items.push({
+      label: 'Model Results',
+      content: (
+        <Typography variant="body2" sx={{ color: '#888', fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+          {typeof meta.modelResults === 'string' ? meta.modelResults : JSON.stringify(meta.modelResults, null, 2)}
+        </Typography>
+      ),
+      icon: <Science sx={{ fontSize: 18, color: '#90caf9', mr: 0.5 }} />,
+    });
+  }
+
+  if (meta.finalResponse) {
+    items.push({
+      label: 'Generated Response',
+      content: (
+        <Typography variant="body2" sx={{ color: '#ccc', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+          {meta.finalResponse}
+        </Typography>
+      ),
+      icon: <Article sx={{ fontSize: 18, color: '#90caf9', mr: 0.5 }} />,
+    });
+  }
+
+  const knownKeys = new Set(['query', 'modelInputs', 'modelResults', 'finalResponse']);
+  const otherKeys = Object.keys(meta).filter(k => !knownKeys.has(k));
+  if (otherKeys.length > 0) {
+    items.push({
+      label: 'Other',
+      content: (
+        <Typography variant="body2" sx={{ color: '#888', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+          {JSON.stringify(Object.fromEntries(otherKeys.map(k => [k, meta[k]])), null, 2)}
+        </Typography>
+      ),
+    });
+  }
+
+  return items.length === 0 ? null : (
+    <Stack spacing={2} sx={{ mt: 1 }}>
+      {items.map((item, idx) => (
+        <Box key={idx}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            {item.icon}
+            <Typography variant="caption" sx={{ color: '#aaa', fontWeight: 600, textTransform: 'uppercase' }}>
+              {item.label}
+            </Typography>
+          </Box>
+          {item.content}
+        </Box>
+      ))}
+    </Stack>
+  );
+};
+
 export const CausalAnalysisResults = () => {
-  const [executionModalOpen, setExecutionModalOpen] = useState(false);
   const analysis = useSelector(selectCurrentAnalysis);
   const hasResults = useSelector(selectHasResults);
   const executionSteps = useSelector(selectExecutionSteps);
@@ -69,36 +163,12 @@ export const CausalAnalysisResults = () => {
   return (
     <Collapse in={hasResults}>
       <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CheckCircle sx={{ color: '#4caf50', mr: 1 }} />
-            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 600 }}>
-              Causal Analysis Results
-            </Typography>
-          </Box>
-          {executionSteps.length > 0 && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<Info />}
-              onClick={() => setExecutionModalOpen(true)}
-              sx={{
-                color: '#90caf9',
-                borderColor: '#90caf9',
-                '&:hover': {
-                  borderColor: '#64b5f6',
-                  backgroundColor: 'rgba(144, 202, 249, 0.08)',
-                },
-              }}
-            >
-              View execution details
-            </Button>
-          )}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+          <CheckCircle sx={{ color: '#4caf50', mr: 1 }} />
+          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 600 }}>
+            Causal Analysis Results
+          </Typography>
         </Box>
-        <ExecutionDetailsModal
-          open={executionModalOpen}
-          onClose={() => setExecutionModalOpen(false)}
-        />
 
         {/* Causal Effect Summary */}
         <Box sx={{ mb: 3 }}>
@@ -137,6 +207,73 @@ export const CausalAnalysisResults = () => {
             </Box>
           </Paper>
         </Box>
+
+        {/* Execution Details - collapsed by default */}
+        {executionSteps.length > 0 && (
+          <Accordion defaultExpanded={false} sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
+            <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Info sx={{ color: '#90caf9', mr: 1 }} />
+                <Typography variant="h6" sx={{ color: '#fff' }}>
+                  Execution Details
+                </Typography>
+                <Chip 
+                  label={executionSteps.length} 
+                  size="small" 
+                  sx={{ ml: 1, backgroundColor: '#90caf9', color: '#fff' }}
+                />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1}>
+                {executionSteps.map((step) => (
+                  <Accordion
+                    key={step.stepId}
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      '&:before': { display: 'none' },
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        {getStepIcon(step.status)}
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 500 }}>
+                          {step.stepName}
+                        </Typography>
+                        <Chip
+                          label={step.status.replace('_', ' ')}
+                          size="small"
+                          sx={{
+                            backgroundColor: step.status === 'completed' ? '#4caf50' : step.status === 'failed' ? '#f44336' : '#666',
+                            color: '#fff',
+                            textTransform: 'capitalize',
+                          }}
+                        />
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="caption" sx={{ color: '#aaa', display: 'block', mb: 1 }}>
+                        {step.description}
+                      </Typography>
+                      {step.startTime && (
+                        <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1 }}>
+                          Started: {new Date(step.startTime).toLocaleString()}
+                        </Typography>
+                      )}
+                      {step.error && (
+                        <Typography variant="body2" sx={{ color: '#f44336', mb: 1 }}>
+                          Error: {step.error}
+                        </Typography>
+                      )}
+                      {renderStepMetadata(step)}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        )}
 
         {/* Analysis Response */}
         <Accordion defaultExpanded sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>

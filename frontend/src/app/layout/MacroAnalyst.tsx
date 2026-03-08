@@ -1,8 +1,7 @@
 import { CssBaseline, ThemeProvider, createTheme, Container, Box, Button, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import { QueryInput } from '../components/QueryInput';
-import { AnalysisStatus } from '../components/AnalysisStatus';
+import { OutOfScopeMessage } from '../components/OutOfScopeMessage';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
-import { CurrentStepNotification } from '../components/CurrentStepNotification';
 import { Header } from '../components/Header';
 import { AboutMePage } from '../components/AboutMePage';
 import { useState } from 'react';
@@ -91,10 +90,9 @@ function MacroAnalyst() {
                 </Button>
               </Box>
               <QueryInput />
-              <AnalysisStatus />
+              <OutOfScopeMessage />
               <CausalAnalysisResults />
             </Container>
-            <CurrentStepNotification />
 
             <Dialog
               open={openPipelineDialog}

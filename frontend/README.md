@@ -124,8 +124,8 @@ npm run build
 MacroAnalyst (Main Layout)
 ├── Header (App title and description)
 ├── QueryInput (Question input and submission)
-├── AnalysisStatus (Progress tracking and status)
-└── CausalAnalysisResults (Results display)
+├── OutOfScopeMessage (Out-of-scope query feedback)
+└── CausalAnalysisResults (Results display with inline execution details)
 ```
 
 ### State Management
