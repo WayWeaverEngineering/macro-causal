@@ -10,7 +10,7 @@ export class OpenAIService {
       openAIApiKey: this.apiKey,
       modelName: "gpt-5.4",
       temperature: 0.1,
-      maxTokens: 2000
+      maxCompletionTokens: 2000
     });
   }
 
@@ -43,7 +43,7 @@ export class OpenAIService {
     return {
       modelName: "gpt-5.4",
       temperature: 0.1,
-      maxTokens: 2000,
+      maxCompletionTokens: 2000,
       apiKeyConfigured: !!this.apiKey
     };
   }
