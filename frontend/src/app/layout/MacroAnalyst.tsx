@@ -2,6 +2,7 @@ import { CssBaseline, ThemeProvider, createTheme, Container, Box, Button, Dialog
 import { QueryInput } from '../components/QueryInput';
 import { AnalysisStatus } from '../components/AnalysisStatus';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
+import { CurrentStepNotification } from '../components/CurrentStepNotification';
 import { Header } from '../components/Header';
 import { AboutMePage } from '../components/AboutMePage';
 import { useState } from 'react';
@@ -93,7 +94,7 @@ function MacroAnalyst() {
               <AnalysisStatus />
               <CausalAnalysisResults />
             </Container>
-            {/* Progress update modal removed */}
+            <CurrentStepNotification />
 
             <Dialog
               open={openPipelineDialog}

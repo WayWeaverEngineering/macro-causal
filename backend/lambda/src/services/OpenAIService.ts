@@ -8,7 +8,7 @@ export class OpenAIService {
     this.apiKey = apiKey;
     this.model = new ChatOpenAI({
       openAIApiKey: this.apiKey,
-      modelName: "gpt-4",
+      modelName: "gpt-5.4",
       temperature: 0.1,
       maxTokens: 2000
     });
@@ -41,7 +41,7 @@ export class OpenAIService {
 
   getModelInfo() {
     return {
-      modelName: "gpt-4",
+      modelName: "gpt-5.4",
       temperature: 0.1,
       maxTokens: 2000,
       apiKeyConfigured: !!this.apiKey

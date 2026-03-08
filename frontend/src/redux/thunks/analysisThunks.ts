@@ -8,8 +8,7 @@ import {
   startAnalysis,
   analysisFailed,
   setExecutionId,
-  addExecutionStep,
-  updateExecutionStep,
+  setExecutionSteps,
   setCurrentStep,
   setAnalysisResult,
   setAnalysisMetadata,
@@ -133,13 +132,8 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
           dispatch(setAnalysisUpdatedAt(response.updatedAt));
         }
         
-        // Update execution steps
-        steps.forEach(step => {
-          dispatch(addExecutionStep(step));
-          if (step.status === 'completed') {
-            dispatch(updateExecutionStep({ stepId: step.stepId, updates: { status: 'completed' } }));
-          }
-        });
+        // Update execution steps (replace to avoid duplicates on each poll)
+        dispatch(setExecutionSteps(steps));
         
         // Update current step
         if (currentStep) {

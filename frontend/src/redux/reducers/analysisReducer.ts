@@ -26,6 +26,9 @@ export const analysisReducer = createReducer<AnalysisState>(initialAnalysisState
     .addCase(actions.addExecutionStep, (state, action) => {
       state.executionSteps.push(action.payload);
     })
+    .addCase(actions.setExecutionSteps, (state, action) => {
+      state.executionSteps = action.payload;
+    })
     .addCase(actions.updateExecutionStep, (state, action) => {
       const stepIndex = state.executionSteps.findIndex(step => step.stepId === action.payload.stepId);
       if (stepIndex !== -1) {

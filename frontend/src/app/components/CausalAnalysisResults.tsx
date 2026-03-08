@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { 
   Box, 
+  Button,
   Paper, 
   Typography, 
   Chip,
@@ -14,19 +16,22 @@ import {
 } from '@mui/material';
 import { 
   ExpandMore,
-  Summarize,
+  Article,
   Lightbulb,
   Warning,
   Psychology,
   CheckCircle,
   Timeline,
   Assessment,
-  Science
+  Science,
+  Info
 } from '@mui/icons-material';
 import { 
   selectCurrentAnalysis, 
-  selectHasResults
+  selectHasResults,
+  selectExecutionSteps
 } from '../../redux/selectors';
+import { ExecutionDetailsModal } from './ExecutionDetailsModal';
 
 const formatConfidence = (confidence: number) => {
   return `${Math.round(confidence * 100)}%`;
@@ -52,8 +57,10 @@ const getEffectColor = (effect: number) => {
 };
 
 export const CausalAnalysisResults = () => {
+  const [executionModalOpen, setExecutionModalOpen] = useState(false);
   const analysis = useSelector(selectCurrentAnalysis);
   const hasResults = useSelector(selectHasResults);
+  const executionSteps = useSelector(selectExecutionSteps);
 
   if (!hasResults) {
     return null;
@@ -62,12 +69,36 @@ export const CausalAnalysisResults = () => {
   return (
     <Collapse in={hasResults}>
       <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-          <CheckCircle sx={{ color: '#4caf50', mr: 1 }} />
-          <Typography variant="h5" sx={{ color: '#fff', fontWeight: 600 }}>
-            Causal Analysis Results
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <CheckCircle sx={{ color: '#4caf50', mr: 1 }} />
+            <Typography variant="h5" sx={{ color: '#fff', fontWeight: 600 }}>
+              Causal Analysis Results
+            </Typography>
+          </Box>
+          {executionSteps.length > 0 && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Info />}
+              onClick={() => setExecutionModalOpen(true)}
+              sx={{
+                color: '#90caf9',
+                borderColor: '#90caf9',
+                '&:hover': {
+                  borderColor: '#64b5f6',
+                  backgroundColor: 'rgba(144, 202, 249, 0.08)',
+                },
+              }}
+            >
+              View execution details
+            </Button>
+          )}
         </Box>
+        <ExecutionDetailsModal
+          open={executionModalOpen}
+          onClose={() => setExecutionModalOpen(false)}
+        />
 
         {/* Causal Effect Summary */}
         <Box sx={{ mb: 3 }}>
@@ -107,19 +138,19 @@ export const CausalAnalysisResults = () => {
           </Paper>
         </Box>
 
-        {/* Summary */}
+        {/* Analysis Response */}
         <Accordion defaultExpanded sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
           <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Summarize sx={{ color: '#90caf9', mr: 1 }} />
+              <Article sx={{ color: '#90caf9', mr: 1 }} />
               <Typography variant="h6" sx={{ color: '#fff' }}>
-                Summary
+                Analysis Response
               </Typography>
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <Typography variant="body1" sx={{ color: '#ccc', lineHeight: 1.6 }}>
-              {analysis?.summary || 'No summary available'}
+            <Typography variant="body1" sx={{ color: '#ccc', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {analysis?.summary || 'No analysis response available'}
             </Typography>
           </AccordionDetails>
         </Accordion>

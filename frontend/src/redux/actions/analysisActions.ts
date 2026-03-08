@@ -11,6 +11,7 @@ import {
 export const startAnalysis = createAction<string>('analysis/startAnalysis');
 export const setExecutionId = createAction<string>('analysis/setExecutionId');
 export const addExecutionStep = createAction<ExecutionStep>('analysis/addExecutionStep');
+export const setExecutionSteps = createAction<ExecutionStep[]>('analysis/setExecutionSteps');
 export const updateExecutionStep = createAction<{ stepId: string; updates: Partial<ExecutionStep> }>('analysis/updateExecutionStep');
 export const setCurrentStep = createAction<ExecutionStep | null>('analysis/setCurrentStep');
 export const setAnalysisResult = createAction<CausalAnalysisResult>('analysis/setAnalysisResult');
