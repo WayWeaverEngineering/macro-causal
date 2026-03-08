@@ -19,7 +19,8 @@
     "@aws-sdk/client-ecs": "3.879.0",
     "@wayweaver/aws-secrets": "3.3.0",
     "@wayweaver/lambda-utils": "4.2.0",
-    "@langchain/openai": "^0.5.11",
+    "@langchain/core": "^1.1.30",
+    "@langchain/openai": "^1.2.0",
     "@wayweaver/aws-queue": "2.1.0"
   },
   "overrides": {
