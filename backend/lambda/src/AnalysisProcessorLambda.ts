@@ -271,10 +271,15 @@ async function processMacroCausalAnalysis(
   
   try {
     // Get OpenAI API key
-    const openAIApiKey = await getSecretValue(OPENAI_API_SECRET_ID, "API_KEY");
+    let openAIApiKey = await getSecretValue(OPENAI_API_SECRET_ID, "API_KEY");
+    if (!openAIApiKey) {
+      openAIApiKey = await getSecretValue(OPENAI_API_SECRET_ID, "OPENAI_API_KEY");
+    }
     if (!openAIApiKey) {
       throw new Error("OpenAI API key not found");
     }
+    // Set env var so LangChain/OpenAI SDK fallback works (required by some initialization paths)
+    process.env.OPENAI_API_KEY = openAIApiKey;
 
     // Initialize services
     const openAIService = new OpenAIService(openAIApiKey);
