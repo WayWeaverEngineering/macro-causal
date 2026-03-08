@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../redux/store';
 import { 
@@ -18,6 +18,7 @@ import {
   selectCurrentQuery, 
   selectCurrentStep, 
 } from '../../redux/selectors';
+import { TypingDots } from './TypingDots';
 
 const exampleQueries = [
   "What's the causal effect of a 1% Fed rate hike on S&P 500 returns?",
@@ -34,21 +35,9 @@ export const QueryInput = () => {
   const currentStep = useSelector(selectCurrentStep);
   
   const [query, setQuery] = useState(currentQuery || '');
-  const [dots, setDots] = useState('');
 
   const statusMessage = currentStep?.description || currentStep?.stepName || 'Analysis in progress';
   const baseMessage = statusMessage.replace(/\.+$/, '');
-
-  useEffect(() => {
-    if (!isExecuting) {
-      setDots('');
-      return;
-    }
-    const interval = setInterval(() => {
-      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
-    }, 400);
-    return () => clearInterval(interval);
-  }, [isExecuting]);
 
   const handleSubmit = () => {
     if (query.trim() && !isExecuting) {
@@ -79,7 +68,7 @@ export const QueryInput = () => {
           multiline
           rows={3}
           variant="outlined"
-          placeholder={isExecuting ? `${baseMessage}${dots}` : "e.g., What's the causal effect of a 1% Fed rate hike on S&P 500 returns?"}
+          placeholder={isExecuting ? `${baseMessage}...` : "e.g., What's the causal effect of a 1% Fed rate hike on S&P 500 returns?"}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyPress}
@@ -143,9 +132,18 @@ export const QueryInput = () => {
           {isExecuting ? 'Analyzing...' : 'Analyze'}
         </Button>
 
-        <Typography variant="body2" sx={{ color: isExecuting ? '#90caf9' : '#888' }}>
-          {isExecuting ? `${baseMessage}${dots}` : 'Press Enter to submit'}
-        </Typography>
+        {isExecuting ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body1" sx={{ color: '#90caf9', fontSize: '0.95rem' }}>
+              {baseMessage}
+            </Typography>
+            <TypingDots color="#90caf9" />
+          </Box>
+        ) : (
+          <Typography variant="body1" sx={{ color: '#888' }}>
+            Press Enter to submit
+          </Typography>
+        )}
       </Box>
 
       <Box>
