@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useAppDispatch } from '../../redux/store';
 import { 
@@ -34,6 +34,21 @@ export const QueryInput = () => {
   const currentStep = useSelector(selectCurrentStep);
   
   const [query, setQuery] = useState(currentQuery || '');
+  const [dots, setDots] = useState('');
+
+  const statusMessage = currentStep?.description || currentStep?.stepName || 'Analysis in progress';
+  const baseMessage = statusMessage.replace(/\.+$/, '');
+
+  useEffect(() => {
+    if (!isExecuting) {
+      setDots('');
+      return;
+    }
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 400);
+    return () => clearInterval(interval);
+  }, [isExecuting]);
 
   const handleSubmit = () => {
     if (query.trim() && !isExecuting) {
@@ -64,7 +79,7 @@ export const QueryInput = () => {
           multiline
           rows={3}
           variant="outlined"
-          placeholder={isExecuting ? (currentStep?.description || currentStep?.stepName || 'Analysis in progress...') : "e.g., What's the causal effect of a 1% Fed rate hike on S&P 500 returns?"}
+          placeholder={isExecuting ? `${baseMessage}${dots}` : "e.g., What's the causal effect of a 1% Fed rate hike on S&P 500 returns?"}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyPress}
@@ -129,7 +144,7 @@ export const QueryInput = () => {
         </Button>
 
         <Typography variant="body2" sx={{ color: isExecuting ? '#90caf9' : '#888' }}>
-          {isExecuting ? (currentStep?.description || currentStep?.stepName || 'Analysis in progress...') : 'Press Enter to submit'}
+          {isExecuting ? `${baseMessage}${dots}` : 'Press Enter to submit'}
         </Typography>
       </Box>
 
