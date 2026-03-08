@@ -1,6 +1,6 @@
 import { Construct } from "constructs";
 import { DataLakeStack } from "../stacks/DataLakeStack";
-import { ConstructIdBuilder, HARRY_FINANCE_ENVIRONMENT } from '@wayweaver/ariadne';
+import { ConstructIdBuilder } from '@wayweaver/ariadne';
 import { EcsFargateServiceConstruct } from "../constructs/EcsFargateServiceConstruct";
 
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -75,7 +75,7 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     const inferenceCert = acm.Certificate.fromCertificateArn(
       this,
       props.idBuilder.build('inference-domain-certificate'),
-      HARRY_FINANCE_ENVIRONMENT.domain.certificateArn,
+      AwsConfig.INFERENCE_DOMAIN_CERTIFICATE_ARN,
     );
 
     const httpsListener = alb.addListener('https-listener', {

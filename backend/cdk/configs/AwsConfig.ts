@@ -8,4 +8,6 @@ export class AwsConfig {
   static readonly FRED_API_SECRET_ID = "fred-api-secrets"
 
   static readonly QUEUE_TIMEOUT_MINS = Duration.minutes(15)
+
+  static readonly INFERENCE_DOMAIN_CERTIFICATE_ARN = "arn:aws:acm:ap-southeast-1:978212996804:certificate/53174e67-aba7-46f6-a7ed-e8646fbdedb3"
 }
