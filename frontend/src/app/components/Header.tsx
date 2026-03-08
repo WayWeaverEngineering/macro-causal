@@ -1,13 +1,14 @@
 import { Box, Typography, Paper, Button } from '@mui/material';
-import { Analytics, Person, ArrowBack } from '@mui/icons-material';
+import { Analytics, Person, ArrowBack, AccountTree } from '@mui/icons-material';
 
 interface HeaderProps {
   onNavigateToContributors?: () => void;
   onBackToMain?: () => void;
+  onViewPipeline?: () => void;
   currentView?: 'main' | 'contributors';
 }
 
-export const Header = ({ onNavigateToContributors, onBackToMain, currentView }: HeaderProps) => {
+export const Header = ({ onNavigateToContributors, onBackToMain, onViewPipeline, currentView }: HeaderProps) => {
   return (
     <Paper 
       elevation={0} 
@@ -33,23 +34,44 @@ export const Header = ({ onNavigateToContributors, onBackToMain, currentView }: 
           This demonstration is for illustrative purposes only and is intended to showcase the architecture and implementation of an AI-powered finance platform. It does not represent or warrant model performance, accuracy, or fitness for any particular purpose. Nothing herein constitutes financial, investment, or legal advice; do not rely on it as such.
         </Typography>
         
-        {/* Navigation Button */}
-        {currentView === 'main' && onNavigateToContributors && (
-          <Button
-            variant="outlined"
-            startIcon={<Person />}
-            onClick={onNavigateToContributors}
-            sx={{
-              color: '#90caf9',
-              borderColor: '#90caf9',
-              '&:hover': {
-                backgroundColor: '#1a3a5f',
-                borderColor: '#64b5f6',
-              },
-            }}
-          >
-            About Me
-          </Button>
+        {/* Navigation Buttons */}
+        {currentView === 'main' && (onNavigateToContributors || onViewPipeline) && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            {onNavigateToContributors && (
+              <Button
+                variant="outlined"
+                startIcon={<Person />}
+                onClick={onNavigateToContributors}
+                sx={{
+                  color: '#90caf9',
+                  borderColor: '#90caf9',
+                  '&:hover': {
+                    backgroundColor: '#1a3a5f',
+                    borderColor: '#64b5f6',
+                  },
+                }}
+              >
+                About Me
+              </Button>
+            )}
+            {onViewPipeline && (
+              <Button
+                variant="outlined"
+                startIcon={<AccountTree />}
+                onClick={onViewPipeline}
+                sx={{
+                  color: '#90caf9',
+                  borderColor: '#90caf9',
+                  '&:hover': {
+                    backgroundColor: '#1a3a5f',
+                    borderColor: '#64b5f6',
+                  },
+                }}
+              >
+                View ML Pipeline Design
+              </Button>
+            )}
+          </Box>
         )}
         
         {currentView === 'contributors' && onBackToMain && (

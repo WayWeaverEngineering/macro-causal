@@ -1,4 +1,4 @@
-import { CssBaseline, ThemeProvider, createTheme, Container, Box, Button, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { CssBaseline, ThemeProvider, createTheme, Container, Box, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import { QueryInput } from '../components/QueryInput';
 import { OutOfScopeMessage } from '../components/OutOfScopeMessage';
 import { CausalAnalysisResults } from '../components/CausalAnalysisResults';
@@ -78,17 +78,13 @@ function MacroAnalyst() {
         <Header 
           onNavigateToContributors={currentView === 'main' ? handleNavigateToContributors : undefined}
           onBackToMain={currentView === 'contributors' ? handleBackToMain : undefined}
+          onViewPipeline={currentView === 'main' ? () => setOpenPipelineDialog(true) : undefined}
           currentView={currentView}
         />
         
         {currentView === 'main' ? (
           <>
             <Container maxWidth="lg" sx={{ py: 4 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                <Button variant="outlined" color="primary" onClick={() => setOpenPipelineDialog(true)}>
-                  View ML Pipeline Design
-                </Button>
-              </Box>
               <QueryInput />
               <OutOfScopeMessage />
               <CausalAnalysisResults />
