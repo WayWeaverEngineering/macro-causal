@@ -43,7 +43,7 @@ const deploy: DeploymentFunction = (
   const cloudFrontStackId = idBuilder.build('cloudfront-dist-stack');
   new CloudFrontDistributionStack(scope, cloudFrontStackId, {
     idBuilder,
-    domainConfig: options.environment.domain,
+    environment: options.environment,
     subDomain: 'macro-ai-analyst',
     prebuiltLambdaFunctions: prebuiltLambdaFunctions,
   });
