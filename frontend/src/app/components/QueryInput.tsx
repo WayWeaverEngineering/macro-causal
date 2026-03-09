@@ -24,7 +24,6 @@ const exampleQueries = [
   "What's the causal effect of a 1% Fed rate hike on S&P 500 returns?",
   "How do CPI surprises affect bond returns?",
   "What market regime are we currently in and how does it affect causal relationships?",
-  "Analyze the causal relationship between GDP growth and equity returns",
   "How do oil price shocks impact inflation and asset returns?"
 ];
 
