@@ -323,7 +323,7 @@ async function processMacroCausalAnalysis(
     // Initialize services
     const openAIService = new OpenAIService(openAIApiKey);
 
-    const MODEL_SERVING_URL =  "https://macro-ai-analyst-inference.wayweaver.com";
+    const MODEL_SERVING_URL =  "https://macro-ai-analyst-inference.harryfinance.ai";
     const modelServingService = new ModelServingService(MODEL_SERVING_URL);
 
     // Step 0: Scope check
