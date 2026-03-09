@@ -1,4 +1,6 @@
 import { useSelector } from 'react-redux';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { 
   Box, 
   Paper, 
@@ -286,9 +288,25 @@ export const CausalAnalysisResults = () => {
             </Box>
           </AccordionSummary>
           <AccordionDetails>
-            <Typography variant="body1" sx={{ color: '#ccc', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {analysis?.summary || 'No analysis response available'}
-            </Typography>
+            <Box
+              sx={{
+                color: '#ccc',
+                lineHeight: 1.6,
+                '& h1, & h2, & h3': { color: '#fff', mt: 2, mb: 1 },
+                '& h2': { fontSize: '1.25rem' },
+                '& h3': { fontSize: '1.1rem' },
+                '& p': { mb: 1 },
+                '& ul, & ol': { pl: 3, mb: 1 },
+                '& li': { mb: 0.5 },
+                '& strong': { color: '#90caf9' },
+                '& code': { backgroundColor: '#1a1a1a', borderRadius: 1, px: 0.5, py: 0.25 },
+                '& pre': { backgroundColor: '#1a1a1a', borderRadius: 1, p: 1, overflowX: 'auto' },
+              }}
+            >
+              <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                {analysis?.summary || 'No analysis response available'}
+              </ReactMarkdown>
+            </Box>
           </AccordionDetails>
         </Accordion>
 
