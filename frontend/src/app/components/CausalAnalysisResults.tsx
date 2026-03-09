@@ -111,18 +111,6 @@ const renderStepMetadata = (step: ExecutionStep) => {
     });
   }
 
-  if (meta.finalResponse) {
-    items.push({
-      label: 'Generated Response',
-      content: (
-        <Typography variant="body2" sx={{ color: '#ccc', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-          {meta.finalResponse}
-        </Typography>
-      ),
-      icon: <Article sx={{ fontSize: 18, color: '#90caf9', mr: 0.5 }} />,
-    });
-  }
-
   const knownKeys = new Set(['query', 'modelInputs', 'modelResults', 'finalResponse']);
   const otherKeys = Object.keys(meta).filter(k => !knownKeys.has(k));
   if (otherKeys.length > 0) {
