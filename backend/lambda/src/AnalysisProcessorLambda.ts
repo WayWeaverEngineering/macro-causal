@@ -102,7 +102,10 @@ async function updateExecutionStep(
     const currentSteps = (result.Item as any)?.steps || [];
     console.log(`Current steps for ${executionId}:`, currentSteps);
     
-    const updatedSteps = [...currentSteps, step];
+    const existingIndex = currentSteps.findIndex((s: ExecutionStep) => s.stepId === step.stepId);
+    const updatedSteps = existingIndex >= 0
+      ? [...currentSteps.slice(0, existingIndex), step, ...currentSteps.slice(existingIndex + 1)]
+      : [...currentSteps, step];
     console.log(`Updated steps for ${executionId}:`, updatedSteps);
     
     // Serialize the step object to handle Date objects properly for DynamoDB

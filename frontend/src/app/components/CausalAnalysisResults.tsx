@@ -210,80 +210,13 @@ export const CausalAnalysisResults = () => {
           </Paper>
         </Box>
 
-        {/* Execution Details - collapsed by default */}
-        {executionSteps.length > 0 && (
-          <Accordion defaultExpanded={false} sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
-            <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Info sx={{ color: '#90caf9', mr: 1 }} />
-                <Typography variant="h6" sx={{ color: '#fff' }}>
-                  Execution Details
-                </Typography>
-                <Chip 
-                  label={executionSteps.length} 
-                  size="small" 
-                  sx={{ ml: 1, backgroundColor: '#90caf9', color: '#fff' }}
-                />
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={1}>
-                {executionSteps.map((step) => (
-                  <Accordion
-                    key={step.stepId}
-                    sx={{
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #444',
-                      '&:before': { display: 'none' },
-                    }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        {getStepIcon(step.status)}
-                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 500 }}>
-                          {step.stepName}
-                        </Typography>
-                        <Chip
-                          label={step.status.replace('_', ' ')}
-                          size="small"
-                          sx={{
-                            backgroundColor: step.status === 'completed' ? '#4caf50' : step.status === 'failed' ? '#f44336' : '#666',
-                            color: '#fff',
-                            textTransform: 'capitalize',
-                          }}
-                        />
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Typography variant="caption" sx={{ color: '#aaa', display: 'block', mb: 1 }}>
-                        {step.description}
-                      </Typography>
-                      {step.startTime && (
-                        <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1 }}>
-                          Started: {new Date(step.startTime).toLocaleString()}
-                        </Typography>
-                      )}
-                      {step.error && (
-                        <Typography variant="body2" sx={{ color: '#f44336', mb: 1 }}>
-                          Error: {step.error}
-                        </Typography>
-                      )}
-                      {renderStepMetadata(step)}
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
-        )}
-
-        {/* Analysis Response */}
+        {/* Causal Analysis */}
         <Accordion defaultExpanded sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
           <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Article sx={{ color: '#90caf9', mr: 1 }} />
               <Typography variant="h6" sx={{ color: '#fff' }}>
-                Analysis Response
+                Causal Analysis
               </Typography>
             </Box>
           </AccordionSummary>
@@ -458,6 +391,73 @@ export const CausalAnalysisResults = () => {
                   </List>
                 </Box>
               )}
+            </AccordionDetails>
+          </Accordion>
+        )}
+
+        {/* Execution Details - collapsed by default */}
+        {executionSteps.length > 0 && (
+          <Accordion defaultExpanded={false} sx={{ mb: 2, backgroundColor: '#2a2a2a', border: '1px solid #444' }}>
+            <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Info sx={{ color: '#90caf9', mr: 1 }} />
+                <Typography variant="h6" sx={{ color: '#fff' }}>
+                  Execution Details
+                </Typography>
+                <Chip 
+                  label={executionSteps.length} 
+                  size="small" 
+                  sx={{ ml: 1, backgroundColor: '#90caf9', color: '#fff' }}
+                />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={1}>
+                {executionSteps.map((step) => (
+                  <Accordion
+                    key={step.stepId}
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #444',
+                      '&:before': { display: 'none' },
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMore sx={{ color: '#fff' }} />}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                        {getStepIcon(step.status)}
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 500 }}>
+                          {step.stepName}
+                        </Typography>
+                        <Chip
+                          label={step.status.replace('_', ' ')}
+                          size="small"
+                          sx={{
+                            backgroundColor: step.status === 'completed' ? '#4caf50' : step.status === 'failed' ? '#f44336' : '#666',
+                            color: '#fff',
+                            textTransform: 'capitalize',
+                          }}
+                        />
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Typography variant="caption" sx={{ color: '#aaa', display: 'block', mb: 1 }}>
+                        {step.description}
+                      </Typography>
+                      {step.startTime && (
+                        <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1 }}>
+                          Started: {new Date(step.startTime).toLocaleString()}
+                        </Typography>
+                      )}
+                      {step.error && (
+                        <Typography variant="body2" sx={{ color: '#f44336', mb: 1 }}>
+                          Error: {step.error}
+                        </Typography>
+                      )}
+                      {renderStepMetadata(step)}
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Stack>
             </AccordionDetails>
           </Accordion>
         )}
