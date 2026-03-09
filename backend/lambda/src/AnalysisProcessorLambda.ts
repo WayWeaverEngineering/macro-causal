@@ -1,7 +1,7 @@
 import { SQSEvent, SQSRecord, Context } from "aws-lambda";
 import { parseSqsRecord } from "@wayweaver/aws-queue";
 import { loadEnvVars } from "@wayweaver/lambda-utils";
-import { ExecutionStep } from "./models/AgentModels";
+import { ExecutionStep, PromptAnalysis } from "./models/AgentModels";
 import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { AnalysisExecution, AnalysisMessage } from "./models/AnalysisModels";
 import { DbClient } from "./clients/DbClient";
@@ -9,6 +9,8 @@ import { initializeUuidPolyfill } from "./utils/UuidPolyfill";
 import { OpenAIService } from "./services/OpenAIService";
 import { getSecretValue } from "@wayweaver/aws-secrets";
 import { ModelServingService } from "./services/ModelServingService";
+import { analyzeQueryScope } from "./agents/QueryAnalyzerAgent";
+import { formatTemporalContextForPrompt } from "./utils/TemporalContext";
 
 // Initialize UUID polyfill to fix v6 function issue in older UUID versions
 initializeUuidPolyfill();
@@ -135,6 +137,40 @@ async function updateExecutionStep(
     console.error(`Error updating execution step for ${executionId}:`, error);
     throw error;
   }
+}
+
+// Generate LLM-based helpful response for out-of-scope queries
+async function generateOutOfScopeResponse(
+  query: string,
+  promptAnalysis: PromptAnalysis | null,
+  openAIService: OpenAIService
+): Promise<string> {
+  const prompt = `
+${formatTemporalContextForPrompt()}
+
+You are an expert macro-causal analysis assistant. The user's query is outside the scope of this system.
+
+USER QUERY: "${query}"
+
+Generate a helpful response that:
+1. Politely explains why the query is out of scope
+2. Suggests alternative approaches or rephrasing
+3. Explains what types of queries ARE in scope
+4. Provides examples of in-scope queries
+
+IMPORTANT: Do NOT mention "knowledge cutoff" or "future beyond my last update". Use the provided current date for any temporal reasoning.
+
+SCOPE DEFINITION:
+- Analysis must be related to macroeconomic causal inference
+- Must involve treatment effects, policy analysis, or causal relationships
+- Should be answerable using X-Learner, Regime Classifier, or Uncertainty Estimator models
+- Topics: monetary policy effects, fiscal policy impacts, trade policy analysis, financial regulation effects, etc.
+
+Respond with a helpful, professional message that guides the user toward in-scope queries.
+`;
+
+  const response = await openAIService.getModel().invoke(prompt);
+  return response.content as string;
 }
 
 // Step 1: Convert user query to model inputs
@@ -290,6 +326,48 @@ async function processMacroCausalAnalysis(
     const MODEL_SERVING_URL =  "https://macro-ai-analyst-inference.wayweaver.com";
     const modelServingService = new ModelServingService(MODEL_SERVING_URL);
 
+    // Step 0: Scope check
+    const scopeStep: ExecutionStep = {
+      stepId: 'step_0',
+      stepName: 'Scope Check',
+      description: 'Determining if the query is in scope for macro-causal analysis',
+      status: 'in_progress',
+      startTime: new Date(),
+      metadata: { query }
+    };
+
+    await updateExecutionStep(executionId, scopeStep);
+
+    const promptAnalysis = await analyzeQueryScope(query, openAIService.getModel());
+
+    scopeStep.status = 'completed';
+    scopeStep.endTime = new Date();
+    scopeStep.metadata = { ...scopeStep.metadata, promptAnalysis };
+    await updateExecutionStep(executionId, scopeStep);
+
+    if (!promptAnalysis.isInScope) {
+      console.log(`Query out of scope for execution ${executionId}, generating helpful response`);
+      let outOfScopeMessage: string;
+      try {
+        outOfScopeMessage = await generateOutOfScopeResponse(query, promptAnalysis, openAIService);
+      } catch (err) {
+        console.error(`generateOutOfScopeResponse failed for ${executionId}, using fallback:`, err);
+        outOfScopeMessage = promptAnalysis.reasoning || "Your query is outside the scope of this macro-causal analysis system. Please try asking about macroeconomic causal inference, policy effects, or regime analysis.";
+      }
+      const outOfScopeResult = removeUndefinedValues({
+        success: false,
+        outOfScope: true,
+        message: outOfScopeMessage,
+        outOfScopeReason: promptAnalysis.reasoning || "Query is outside the scope of macro-causal analysis",
+        metadata: {
+          analysisType: "out_of_scope",
+          stepsCompleted: 1,
+          executionTime: Date.now() - scopeStep.startTime!.getTime()
+        }
+      });
+      return outOfScopeResult;
+    }
+
     // Step 1: Convert query to model inputs
     const queryStep: ExecutionStep = {
       stepId: 'step_1',
@@ -299,11 +377,11 @@ async function processMacroCausalAnalysis(
       startTime: new Date(),
       metadata: { query }
     };
-    
+
     await updateExecutionStep(executionId, queryStep);
-    
+
     const modelInputs = await convertQueryToModelInputs(query, openAIService);
-    
+
     queryStep.status = 'completed';
     queryStep.endTime = new Date();
     queryStep.metadata = { ...queryStep.metadata, modelInputs };
@@ -318,11 +396,11 @@ async function processMacroCausalAnalysis(
       startTime: new Date(),
       metadata: { modelInputs }
     };
-    
+
     await updateExecutionStep(executionId, modelStep);
-    
+
     const modelResults = await executeModelInference(modelInputs, modelServingService);
-    
+
     modelStep.status = 'completed';
     modelStep.endTime = new Date();
     modelStep.metadata = { ...modelStep.metadata, modelResults };
@@ -337,11 +415,11 @@ async function processMacroCausalAnalysis(
       startTime: new Date(),
       metadata: { modelResults }
     };
-    
+
     await updateExecutionStep(executionId, responseStep);
-    
+
     const finalResponse = await generateFinalResponse(query, modelResults, openAIService);
-    
+
     responseStep.status = 'completed';
     responseStep.endTime = new Date();
     responseStep.metadata = { ...responseStep.metadata, finalResponse };
@@ -359,10 +437,10 @@ async function processMacroCausalAnalysis(
         methodology: "Hybrid X-Learner with Double ML + PyTorch Regime/Uncertainty"
       },
       metadata: {
-        executionTime: Date.now() - queryStep.startTime!.getTime(),
+        executionTime: Date.now() - scopeStep.startTime!.getTime(),
         analysisType: "hybrid_causal_inference",
         complexity: "advanced",
-        stepsCompleted: 3
+        stepsCompleted: 4
       }
     });
 

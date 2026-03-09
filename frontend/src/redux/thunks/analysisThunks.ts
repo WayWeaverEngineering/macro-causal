@@ -166,9 +166,13 @@ export const pollAnalysisStatusThunk = createAsyncThunk(
             dispatch(setAssetReturns(response.assetReturns));
           }
           
-          // Check if out of scope
-          if (response.error && response.error.includes('out of scope')) {
-            dispatch(setOutOfScope({ isInScope: false, reason: response.error }));
+          // Check if out of scope (structured result or legacy error)
+          const isOutOfScope = response.result?.outOfScope || response.outOfScopeReason ||
+            (response.error && response.error.includes('out of scope'));
+          if (isOutOfScope) {
+            const reason = response.result?.outOfScopeReason || response.outOfScopeReason ||
+              response.result?.message || response.error;
+            dispatch(setOutOfScope({ isInScope: false, reason }));
           }
           
           dispatch(analysisCompleted());
@@ -265,9 +269,13 @@ export const submitAnalysisWithProgressThunk = createAsyncThunk(
         dispatch(setAssetReturns(response.assetReturns));
       }
       
-      // Check if out of scope
-      if (response.error && response.error.includes('out of scope')) {
-        dispatch(setOutOfScope({ isInScope: false, reason: response.error }));
+      // Check if out of scope (structured result or legacy error)
+      const isOutOfScope = response.result?.outOfScope || response.outOfScopeReason ||
+        (response.error && response.error.includes('out of scope'));
+      if (isOutOfScope) {
+        const reason = response.result?.outOfScopeReason || response.outOfScopeReason ||
+          response.result?.message || response.error;
+        dispatch(setOutOfScope({ isInScope: false, reason }));
       }
       
       dispatch(analysisCompleted());

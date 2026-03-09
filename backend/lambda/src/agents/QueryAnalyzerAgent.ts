@@ -1,5 +1,93 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { AgentState, ExecutionStep, PromptAnalysis } from "../models/AgentModels";
+import { formatTemporalContextForPrompt } from "../utils/TemporalContext";
+
+/**
+ * Shared scope analysis function. Callable from both QueryAnalyzerAgent and AnalysisProcessorLambda.
+ */
+export async function analyzeQueryScope(
+  userQuery: string,
+  model: ChatOpenAI
+): Promise<PromptAnalysis> {
+  console.log('analyzeQueryScope - Starting prompt analysis');
+  console.log('analyzeQueryScope - User query:', userQuery);
+
+  const prompt = `
+${formatTemporalContextForPrompt()}
+
+You are an expert macro-causal analysis assistant. Your task is to determine if a user query is in scope for macro-causal inference analysis.
+
+SCOPE DEFINITION:
+- Analysis must be related to macroeconomic causal inference
+- Must involve treatment effects, policy analysis, or causal relationships
+- Should be answerable using X-Learner, Regime Classifier, or Uncertainty Estimator models
+- Topics include: monetary policy effects, fiscal policy impacts, trade policy analysis, financial regulation effects, etc.
+- Queries about general market conditions without causal focus, or non-economic topics are OUT OF SCOPE
+
+OUT OF SCOPE (mark as isInScope: false):
+- Personal finance advice (e.g., "How do I get rich?", "What stocks should I buy?")
+- Life advice, career advice, or general self-help
+- Queries unrelated to macroeconomics or causal inference
+- General market commentary without causal/policy focus
+- Questions about individual stock picks or portfolio construction
+- Non-economic topics (weather, sports, etc.)
+
+IMPORTANT: When uncertain whether a query is in scope, default to out of scope.
+
+USER QUERY: "${userQuery}"
+
+First provide your reasoning, then respond with a JSON object containing:
+{
+  "isInScope": boolean,
+  "reasoning": "detailed explanation of why in/out of scope",
+  "analysisType": "treatment_effect|regime_classification|uncertainty_estimation|other",
+  "complexity": "simple|moderate|complex",
+  "requiredData": ["list of required data types"],
+  "estimatedSteps": number
+}
+
+RESPONSE (JSON only):
+`;
+
+  try {
+    const response = await model.invoke(prompt);
+    console.log('analyzeQueryScope - Model invocation successful');
+
+    const content = response.content as string;
+    console.log('analyzeQueryScope - Response content length:', content.length);
+
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error("No JSON found in response");
+      }
+
+      const result = JSON.parse(jsonMatch[0]) as PromptAnalysis;
+      console.log('analyzeQueryScope - JSON parsed successfully');
+      return result;
+    } catch (error) {
+      console.log('analyzeQueryScope - JSON parsing failed:', error);
+      return {
+        isInScope: false,
+        reasoning: "Unable to parse analysis response",
+        analysisType: "other",
+        complexity: "simple",
+        requiredData: [],
+        estimatedSteps: 1
+      };
+    }
+  } catch (error) {
+    console.log('analyzeQueryScope - Model invocation failed:', error);
+    return {
+      isInScope: false,
+      reasoning: "Unable to parse analysis response",
+      analysisType: "other",
+      complexity: "simple",
+      requiredData: [],
+      estimatedSteps: 1
+    };
+  }
+}
 
 export class QueryAnalyzerAgent {
   private model: ChatOpenAI;
@@ -19,7 +107,7 @@ export class QueryAnalyzerAgent {
 
     try {
       // Analyze the prompt
-      const analysis = await this.analyzePrompt(state.userQuery);
+      const analysis = await analyzeQueryScope(state.userQuery, this.model);
       
       // Create execution plan
       const executionSteps = this.createExecutionPlan(analysis);
@@ -51,80 +139,6 @@ export class QueryAnalyzerAgent {
         currentStep: step,
         isInScope: false,
         error: step.error
-      };
-    }
-  }
-
-  private async analyzePrompt(userQuery: string): Promise<PromptAnalysis> {
-    console.log('QueryAnalyzerAgent.analyzePrompt - Starting prompt analysis');
-    console.log('QueryAnalyzerAgent.analyzePrompt - User query:', userQuery);
-    
-    const prompt = `
-You are an expert macro-causal analysis assistant. Your task is to determine if a user query is in scope for macro-causal inference analysis.
-
-SCOPE DEFINITION:
-- Analysis must be related to macroeconomic causal inference
-- Must involve treatment effects, policy analysis, or causal relationships
-- Should be answerable using X-Learner, Regime Classifier, or Uncertainty Estimator models
-- Topics include: monetary policy effects, fiscal policy impacts, trade policy analysis, financial regulation effects, etc.
-- Queries about general market conditions without causal focus, or non-economic topics are OUT OF SCOPE
-
-USER QUERY: "${userQuery}"
-
-Analyze this query and respond with a JSON object containing:
-{
-  "isInScope": boolean,
-  "reasoning": "detailed explanation of why in/out of scope",
-  "analysisType": "treatment_effect|regime_classification|uncertainty_estimation|other",
-  "complexity": "simple|moderate|complex",
-  "requiredData": ["list of required data types"],
-  "estimatedSteps": number
-}
-
-RESPONSE (JSON only):
-`;
-
-    console.log('QueryAnalyzerAgent.analyzePrompt - About to invoke model');
-    
-    try {
-      const response = await this.model.invoke(prompt);
-      console.log('QueryAnalyzerAgent.analyzePrompt - Model invocation successful');
-      
-      const content = response.content as string;
-      console.log('QueryAnalyzerAgent.analyzePrompt - Response content length:', content.length);
-      
-      try {
-        // Extract JSON from response
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error("No JSON found in response");
-        }
-        
-        const result = JSON.parse(jsonMatch[0]) as PromptAnalysis;
-        console.log('QueryAnalyzerAgent.analyzePrompt - JSON parsed successfully');
-        return result;
-      } catch (error) {
-        console.log('QueryAnalyzerAgent.analyzePrompt - JSON parsing failed:', error);
-        // Fallback analysis
-        return {
-          isInScope: false,
-          reasoning: "Unable to parse analysis response",
-          analysisType: "other",
-          complexity: "simple",
-          requiredData: [],
-          estimatedSteps: 1
-        };
-      }
-    } catch (error) {
-      console.log('QueryAnalyzerAgent.analyzePrompt - Model invocation failed:', error);
-      // Fallback analysis
-      return {
-        isInScope: false,
-        reasoning: "Unable to parse analysis response",
-        analysisType: "other",
-        complexity: "simple",
-        requiredData: [],
-        estimatedSteps: 1
       };
     }
   }

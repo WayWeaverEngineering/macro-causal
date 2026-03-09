@@ -23,6 +23,7 @@ export interface AnalysisStatusResponse {
   currentStep: ExecutionStep | null;
   result?: any;
   error?: string;
+  outOfScopeReason?: string;
   createdAt: string;
   updatedAt: string;
 }

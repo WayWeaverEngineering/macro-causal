@@ -59,7 +59,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     console.log(`AnalysisStatusLambda steps:`, execution.steps);
     console.log(`AnalysisStatusLambda currentStep:`, execution.currentStep);
 
-    // Prepare response
+    // Prepare response (pass through outOfScopeReason from result for frontend)
     const response: AnalysisStatusResponse = {
       success: true,
       message: "Execution status retrieved successfully",
@@ -71,6 +71,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       currentStep: execution.currentStep,
       result: execution.result,
       error: execution.error,
+      outOfScopeReason: execution.result?.outOfScopeReason,
       createdAt: execution.createdAt,
       updatedAt: execution.updatedAt
     };
