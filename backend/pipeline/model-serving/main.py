@@ -184,7 +184,8 @@ async def list_models():
     try:
         response_items = _scan_all(
             TableName=MODEL_REGISTRY_TABLE,
-            ProjectionExpression="model_id, model_name, model_version, status, created_at"
+            ProjectionExpression="model_id, model_name, model_version, #status, created_at",
+            ExpressionAttributeNames={"#status": "status"}
         )
         
         models = []
@@ -309,7 +310,8 @@ async def initialize_models():
         # Get available models from DynamoDB
         response_items = _scan_all(
             TableName=MODEL_REGISTRY_TABLE,
-            FilterExpression="status = :status",
+            FilterExpression="#status = :status",
+            ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={":status": {"S": "ready"}},
             ProjectionExpression="model_id, model_path"
         )

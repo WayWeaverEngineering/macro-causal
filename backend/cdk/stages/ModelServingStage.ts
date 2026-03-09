@@ -106,7 +106,9 @@ export class ModelServingStage extends Construct implements sfn.IChainable {
     
     // Grant permissions to read from artifacts bucket (for trained models)
     props.dataLakeStack.artifactsBucket.grantRead(modelServingService.service.taskDefinition.taskRole);
-    
+    // Grant write so ensure_model_folders() can create models/YYYYMMDD/.keep
+    props.dataLakeStack.artifactsBucket.grantWrite(modelServingService.service.taskDefinition.taskRole);
+
     // Grant permissions to read from model registry table
     const modelRegistryReadStatement = new PolicyStatement({
       effect: Effect.ALLOW,
