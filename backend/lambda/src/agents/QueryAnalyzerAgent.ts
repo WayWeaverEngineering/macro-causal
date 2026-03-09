@@ -24,6 +24,13 @@ SCOPE DEFINITION:
 - Topics include: monetary policy effects, fiscal policy impacts, trade policy analysis, financial regulation effects, etc.
 - Queries about general market conditions without causal focus, or non-economic topics are OUT OF SCOPE
 
+IN SCOPE EXAMPLES (queries like these are in scope):
+- Causal effect of Fed rate or monetary policy changes on equity/asset returns
+- Effect of CPI or other macro surprises on bond or asset returns
+- Current market regime and its effect on causal relationships
+- Causal relationship between GDP growth (or other macro variables) and equity returns
+- Impact of oil or other price shocks on inflation and asset returns
+
 OUT OF SCOPE (mark as isInScope: false):
 - Personal finance advice (e.g., "How do I get rich?", "What stocks should I buy?")
 - Life advice, career advice, or general self-help
@@ -32,7 +39,7 @@ OUT OF SCOPE (mark as isInScope: false):
 - Questions about individual stock picks or portfolio construction
 - Non-economic topics (weather, sports, etc.)
 
-IMPORTANT: When uncertain whether a query is in scope, default to out of scope.
+IMPORTANT: Queries that match the in-scope examples above or clearly ask about macro causal effects, policy/rate effects on returns, regime analysis, or shock impacts on inflation/returns are IN SCOPE. Only mark out of scope when the query is clearly unrelated (e.g. personal finance, life advice, non-economic topics).
 
 USER QUERY: "${userQuery}"
 
